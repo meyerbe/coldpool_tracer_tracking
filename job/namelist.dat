@@ -1,0 +1,22 @@
+&INPUTgeneral
+! general 
+dsize_x=1024,  !domainsize
+dsize_y=1024,   
+dt=300,      !output timestep 
+res=200,
+/  
+&INPUTIO
+odir='/nbi/ac/conv1/henneb/results/coldpool/test/'
+/
+&INPUTrain
+cutoff=1.0           ! cut off for precip (mm/s)
+minimum_size=50.  
+/
+&INPUTtracer
+! cp tracking
+max_tracer_CP=900,
+!odir='output/'
+!lstopwind = False  ! stops tracer if accelerated (not working yet)
+!lstopside = True   ! stops all tracer of CP if all on one side of the precip
+/
+
