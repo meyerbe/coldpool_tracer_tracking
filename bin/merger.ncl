@@ -3,9 +3,10 @@ begin
 ; READ INPUT
 ; -------------------------------------
 ;system("sort -n -k2 output/raincell/irt_tracks_output_pure.txt > output/raincell/irt_tracks_output_pure_sort.txt")
-obj = readAsciiTable("output/raincell/irt_objects_output.txt",23 ,"integer",0)
-track = readAsciiTable("output/raincell/irt_tracks_output_pure_sort.txt",12 , "integer",0)
-track2 = readAsciiTable("input/cp/irt_tracks_header_sorted.txt",5,"integer",0)
+path=path
+obj = readAsciiTable(path+"output/raincell/irt_objects_output.txt",23 ,"integer",0)
+track = readAsciiTable(path+"output/raincell/irt_tracks_output_pure_sort.txt",12 , "integer",0)
+track2 = readAsciiTable(path+"input/cp/irt_tracks_header_sorted.txt",5,"integer",0)
 
 ; -----------------------------
 ; sort data 
