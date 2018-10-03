@@ -160,7 +160,7 @@ print 'took ',(etime-atime), 'for loop to find associated CPs'
 ######################################################
 # save temorary data 
 ######################################################
-os.mkdir('/nbi/ac/conv1/henneb/results/coldpool/'+EXPID+'/tempdata/')
+os.mkdir('/nbi/ac/conv1/henneb/results/coldpool/'+EXPID+'/tempdata/', exist_ok=True)
 for data in a:
  print data.CPs
  data.noCPs = len(data.CPs)
