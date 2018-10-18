@@ -1,10 +1,22 @@
-! 2018 Sep 08
+! 2018 Sep 08 O Henneb
 ! read rain tracking output txt for COGs (loop trough every line)
 ! read 2D velocity field (time-stepwise)
 ! read rain track cells for precipitation boundaries (timestepwise)
 ! SUBROUTINE neigh idetifies precipitation boundaries
 ! SUBROUTINE set_tracer sets tracer at the boundaries 
-
+! 
+! 2018 Oct:
+! change initial tracer placement from precip boundary to circles
+! calculate effective radius r = sqrt(A)/pi 
+! Problem: tracers which are inside the precip area never chatch up
+! alternatives: 
+!    set tracer at outremost circle
+!    distribute tracer equally around outline
+!      * sort boundary points by angle 
+!      * calculate distance from one gp to another and sum it up ->
+!        circulferance    
+!      * divide by circum by no of desired tracer to get distance 
+!
 ! OUTPUT: 
 ! traced(CP-ID,int tracer ID, property) 
 ! traced(:,:, 1)   x pos of tracer 
@@ -35,6 +47,7 @@ REAL, ALLOCATABLE    :: input_field(:,:)      ! eg precip field to find COGs
 REAL, ALLOCATABLE    :: vel(:,:,:)               ! velocity field
 REAL, ALLOCATABLE    :: nneighb(:,:)             ! identifier for cell boundaries
 REAL, ALLOCATABLE    :: COMx(:), COMy(:)         ! store cog
+REAL, ALLOCATABLE    :: rmax(:)                  ! area of precip
 INTEGER, ALLOCATABLE :: IDstart(:)               ! first timestep of precip 
 REAL, ALLOCATABLE    :: track_numbers(:,:)       ! ID for precip and coldpoolsobjects
 INTEGER, ALLOCATABLE :: already_tracked(:)       ! memory of cell counter
@@ -44,6 +57,7 @@ REAL, ALLOCATABLE    :: traced_prev(:,:,:)       ! traced information from previ
 INTEGER              :: cpio(1700,2)              ! to identify merger (dim1) and start time (dim2) splitting events have start time 0 to avoid them
 INTEGER              :: ID                       ! local ID from rain track
 INTEGER              :: tts                      ! timestep
+!REAL                 :: areain                   ! size of precip cell
 INTEGER              :: i                        ! running index
 INTEGER              :: ierr                     ! error index for reading files
 REAL                 :: xcog, ycog               ! buffer variable for read COGs
@@ -85,6 +99,7 @@ count_tracer = 1 ! counts individual pixels !OCH was ist mit pixeln gemeint? der
 
 OPEN(2,FILE=trim(odir) // '/output/raincell/irt_tracks_mask.srv',    FORM='unformatted', ACTION='read')
 OPEN(40,FILE=trim(odir) // '/output/cp/coldpool_tracer_out.txt',FORM='formatted', ACTION='write')
+!write(*,*) trim(odir) // '/input/cp/input_u.srv'
 OPEN(4,FILE=trim(odir) // '/input/cp/input_u.srv',FORM='unformatted', ACTION='read')
 OPEN(5,FILE=trim(odir) // '/input/cp/input_v.srv',FORM='unformatted', ACTION='read')
 
@@ -103,6 +118,7 @@ ALLOCATE(traced_prev(max_no_of_cells,max_tracer_CP,18))
 ALLOCATE(IDstart(max_no_of_cells))
 ALLOCATE(COMx(max_no_of_cells))
 ALLOCATE(COMy(max_no_of_cells))
+ALLOCATE(rmax(max_no_of_cells))
 ALLOCATE(vel(dsize_x,dsize_y,2))
 ALLOCATE(track_numbers(dsize_x,dsize_y))
 ALLOCATE(nneighb(dsize_x,dsize_y)) 
@@ -114,11 +130,15 @@ ALLOCATE(tracpo(2,max_tracers))
 already_tracked(:) = 0
 traced(:,:,:) = 0.
 traced_prev(:,:,:) = 0.
-
+IDstart(:) = 0
 
 timestep=-1 !OCH why -1 !-1
 ! read when first precip is tracked
  OPEN(3,FILE=trim(odir) // '/input/cp/tracks_body_time_sorted.txt',FORM='formatted',ACTION='read')
+! 17.10.18 for circle function
+! 153 FORMAT (7X,I5,9X,I3,26X,F11.0,41X   57X,F10.4,7X,F10.4)
+! READ(3,153,END=200)  ID, tts,areain, xcog,ycog
+ !write(*,*) ID, tts,areain, xcog,ycog
  153 FORMAT (7X,I5,9X,I3,94X,F10.4,7X,F10.4)
  READ(3,153,END=200)  ID, tts, xcog,ycog  
  onset = tts
@@ -141,13 +161,18 @@ timestep=-1 !OCH why -1 !-1
      ! or previously read 
      COMx(ID) = xCOG
      COMy(ID) = yCOG
+     !area(ID) = areain
      DO WHILE (tts .eq. timestep ) !as long as CPs at the same tiemstep are read
        traced(ID,:,16) = 1 ! precip is ongoing
+       !READ(3,153,END=200)  ID, tts, areain, xcog,ycog ! read next line 
        READ(3,153,END=200)  ID, tts, xcog,ycog ! read next line 
+
+  !write(*,*) ID, tts,areain, xcog,ycog
        if (IDstart(ID) .eq. 0) IDstart(ID) = tts ! new CP
        IF (tts .eq. timestep ) THEN ! and store cog if still at the same timestep
          COMx(ID) = xcog
          COMy(ID) = ycog
+         !area(ID) = areain
        END IF
        ! now the next timestep is already read
        ! dont overwrite COG (will be stored in xCOG until the next timestep)
@@ -163,11 +188,14 @@ timestep=-1 !OCH why -1 !-1
      counter=1
   
      ! identification of edges
-     CALL neigh(track_numbers,nneighb)
+     !CALL neigh(track_numbers,nneighb)
+     CALL maxcell(track_numbers,COMx,COMy,rmax,max_no_of_cells)
+     CALL initCircle(max_no_of_cells,timestep,IDstart,traced, COMx,COMy,&
+                     rmax,cpio,max_tracers,tracpo,count_tracer)
      ! set initial tracer at beginning of rain event
-     CALL set_tracer(nneighb, track_numbers,max_no_of_cells, &
-        timestep,traced, &
-        count_tracer,already_tracked,tracpo,max_tracers,cpio)
+!     CALL set_tracer(nneighb, track_numbers,max_no_of_cells, &
+!        timestep,traced, &
+!        count_tracer,already_tracked,tracpo,max_tracers,cpio)
      CALL update_tracer(vel(:,:,1),vel(:,:,2),timestep,traced, count_tracer, &
                         max_no_of_cells,tracpo,max_tracers)
      CALL geometry(traced,COMx,COMy,already_tracked,max_no_of_cells) 
@@ -242,7 +270,9 @@ CONTAINS
 !--------------------------------------------------
 
 !++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-! identify boundaries of the precipitation cells
+!--------------------------------------------------
+! this routine is replaced by initCircle 
+!--------------------------------------------------
 SUBROUTINE neigh(track_numbers,nneighb)
 
   USE cp_parameters, ONLY : dsize_x, dsize_y
@@ -272,6 +302,81 @@ SUBROUTINE neigh(track_numbers,nneighb)
     END DO
   END DO
 END SUBROUTINE neigh
+
+SUBROUTINE maxcell(track_numbers,COMx,COMy,rmax,max_no_of_cells)
+  USE cp_parameters, ONLY : dsize_x, dsize_y
+  IMPLICIT NONE
+  INTEGER, INTENT(IN)    :: max_no_of_cells
+  REAL, INTENT(OUT)      :: rmax(max_no_of_cells)
+  INTEGER                :: i,j
+  REAL, INTENT(IN)       :: track_numbers(dsize_x,dsize_y)
+  REAL, INTENT(IN)       :: COMx(max_no_of_cells), COMy(max_no_of_cells)
+  REAL                   :: rt, dx, dy 
+  rmax(:) = 0
+  DO i =2,dsize_x-1
+    DO j =2,dsize_y-1
+      IF (track_numbers(i,j) .gt. 0) THEN
+        dx = mod(i +(dsize_x/2. - COMx(int(track_numbers(i,j))))+dsize_x-1,float(dsize_x))+1  - dsize_x/2.
+        dy = mod(j +(dsize_y/2. - COMy(int(track_numbers(i,j))))+dsize_y-1,float(dsize_y))+1  - dsize_y/2.
+        rt = sqrt(dx**2 + dy**2) 
+        rmax(int(track_numbers(i,j))) =max(rmax(int(track_numbers(i,j))),rt)       
+      END IF
+    END DO
+  END DO
+END SUBROUTINE maxcell
+!--------------------------------------------------------------------------------------
+! Calculate  circle around COG dependent on size for initial tracer placement
+! replaces routine neighbours
+!--------------------------------------------------------------------------------------
+SUBROUTINE initCircle(max_no_of_cells,ts,IDstart,traced, COMx,COMy, &
+                      rmax,cpio,max_tracers,tracpo,count_tracer)
+  USE cp_parameters, ONLY : dsize_x, dsize_y,max_tracer_CP
+  
+  INTEGER, INTENT(IN)       :: max_no_of_cells, max_tracers, ts
+  INTEGER, INTENT(IN)       :: IDstart(max_no_of_cells)
+  REAL, INTENT(IN)          :: rmax(max_no_of_cells),&
+                               COMx(max_no_of_cells), COMy(max_no_of_cells)
+  INTEGER, INTENT(IN)       :: cpio(1700,2)
+  INTEGER, INTENT(INOUT)    :: count_tracer
+  INTEGER, INTENT(INOUT)    :: tracpo(2,max_tracers)
+  REAL, INTENT(INOUT)       :: traced(max_no_of_cells,max_tracer_CP,18)
+  REAL                      :: pi, inc !, reff 
+  INTEGER                   :: i, j
+  
+  pi = 2.*asin(1.)
+  inc = 2*pi/max_tracer_CP
+  do i = 1,max_no_of_cells,1 ! loop trough precip cells
+   if (cpio(i,2) .ne. 0 ) then ! avoid splitting events 
+
+   if (IDstart(i) == ts) then ! set new circle when precip begins
+  write(*,*) 'in i', i, IDstart(i),ts
+
+     !reff = sqrt(area(i))/pi 
+      do j = 1,max_tracer_CP,1 ! loop trough tracer number
+        tracpo(:,count_tracer)=(/i,j/)
+        count_tracer           = count_tracer + 1
+
+        traced(i,j, 1) = MOD(COMx(i) + rmax(i)*cos(j*inc)-1.,float(dsize_x))+1.
+        traced(i,j, 2) = MOD(COMy(i) + rmax(i)*sin(j*inc)-1.,float(dsize_y))+1.
+        !traced(i,j, 3) = nint(traced(i,j,1))
+        !traced(i,j, 4) = nint(traced(i,j,2))
+        !traced(i,j, 5) = rmax(i)
+        traced(i,j, 6) = ts ! current time
+        traced(i,j, 7) = 0   ! age 
+        !traced(i,j, 8) = j*inc 
+        traced(i,j, 9) = i 
+        traced(i,j,10) = 0 
+        traced(i,j,11) = 1   ! active tracer 
+        traced(i,j,12) = cpio(i,2)  ! start 
+        !traced(i,j,13) = 0   ! u 
+        !traced(i,j,14) = 0   ! v
+      end do
+   end if
+   end if
+   !write(*,*) traced(i,j, 1),traced(i,j, 2) 
+  end do
+END SUBROUTINE 
+
 
 !--------------------------------------------------------------------------------------
 ! SET TRACER at their initial position acording to precipitation outlines

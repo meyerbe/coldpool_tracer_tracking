@@ -1,20 +1,24 @@
 begin
 ; 
-startzeit = 47 
+startzeit = 136 ;45 
 ;--------------------------------
 ;--- GET DATA
 ;------------------------------
 ; get tracer heade to identify self imerged events
- header =readAsciiTable("../input/cp/irt_tracks_header_sorted.txt",5,"float",0)
+ sim = "test1plus4K" 
+ expid = "test1plus4K_circle"
+ header =readAsciiTable("$results/coldpool/"+expid+"/input/cp/irt_tracks_header_sorted.txt",5,"float",0)
  IDheader     = header(:,0)   ; track ID given in header 
  startLabel   = header(:,3)   ; how does tarck starts ?
  indself = ind(startLabel .eq. 0) ; where does from nothing
  track0 = IDheader(indself) ; trackIDs for tracks starting from 0
 ; get rain file to get original cogs
- body=readAsciiTable("../output/raincell/irt_tracks_output_pure.txt",12,"float",0)
+ body=readAsciiTable("$results/coldpool/"+expid+"/output/raincell/irt_tracks_output_pure.txt",12,"float",0)
 ;--- tracer data
 ; data_all   = readAsciiTable("cp_history.txt",10,"double",1)
- data_all   = readAsciiTable("../output/cp/coldpool_tracer_out.txt",12,"float",0) 
+ data_all   = readAsciiTable("$results/coldpool/"+expid+"/output/cp/coldpool_tracer_out.txt",12,"float",0) 
+; data_all   = readAsciiTable("../postprocessing/tst.txt",12,"float",0)
+
  timei=0
  agei=1
  traceIDi= 2
@@ -32,9 +36,9 @@ startzeit = 47
 ;---modelo output
 ; filein = addfile("$modelo/test1plus4K/level1/test1plus4K.out.vol.t.nc","r")
 ; plotvar = filein->t(134,:,:,0)
- filein = addfile("$modelo/../Moseley2018/data/lind_p2K/lind_p2K.out.vol.u.nc","r")
+ filein = addfile("$modelo/"+sim+"/level1/"+sim+".out.vol.u.nc","r")
  u = filein->u(startzeit-1::,:,:,0)
- filein = addfile("$modelo/../Moseley2018/data/lind_p2K/lind_p2K.out.vol.v.nc","r")
+ filein = addfile("$modelo/"+sim+"/level1/"+sim+".out.vol.v.nc","r")
  v = filein->v(startzeit-1::,:,:,0)
 ; filein=addfile("irt_tracks_mask.nc","r")
 ; plotvar = filein->var1
@@ -56,8 +60,8 @@ startzeit = 47
   resv@vcRefAnnoSide ="Right"
   resv@vcRefAnnoParallelPosF = 1-0.6
   resv@vcRefAnnoOrthogonalPosF = -0.3
-  resv@trXMaxF =1024 ;320 ; 150 ;170 ;150; 200;170; ;200
-  resv@trYMaxF =1024; 320; 150 ;240 ;210;  250;160 ;250
+  resv@trXMaxF =320 ; 150 ;170 ;150; 200;170; ;200
+  resv@trYMaxF =320; 150 ;240 ;210;  250;160 ;250
   resv@trXMinF =0 ;150 ;70  ;130;  100;100;; 100
   resv@trYMinF =0; 150 ;140 ;190;  150;90 ; 150
 
@@ -113,11 +117,11 @@ startzeit = 47
  ii = new(nmarker,integer)
 print("start main loop")
 do t = 0,dimsizes(u(:,0,0))-2  
- wks = gsn_open_wks("png","plots/testtracer_new_wholedomain_stop"+sprinti("%0.4i",t) )
+ wks = gsn_open_wks("png","plots/circle2"+sprinti("%0.4i",t) )
 
-  pl = gsn_csm_vector(wks, u(t,:,:),v(t,:,:), resv)
+ pl = gsn_csm_vector(wks, u(t,:,:),v(t,:,:), resv)
 
-  if (.not. all(ismissing(ind(data(:,0) .eq. t+startzeit))))
+ if (.not. all(ismissing(ind(data(:,0) .eq. t+startzeit))))
   datatime = data(ind(data(:,0) .eq. t+startzeit),:) 
   c = 0
   do i = 0,noCPs-1 ; loop troughy cps 

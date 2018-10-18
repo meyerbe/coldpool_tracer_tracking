@@ -11,7 +11,7 @@ import operator
 from classes import CPlife,COL,CP_terminate 
 from six.moves import cPickle
 from collections import OrderedDict
-EXPID =  'test1plus4K'# 'lindp2K'#
+EXPID =  'test1plus4K_circle'# 'lindp2K'#
 odir = '/nbi/ac/conv1/henneb/results/coldpool/'
 ngp = 320
 
@@ -42,7 +42,7 @@ for k in a.keys():
      
 f = open(odir+EXPID+'/output/cp/coldpool_tracer_out.txt', 'r')
 lines = f.readlines()
-fo = open("tst.txt",'wb')
+fo = open(odir+EXPID+'/output/cp/coldpool_tracer_out_reduce.txt','wb')
 
 for line in lines:
   columns = line.split()
