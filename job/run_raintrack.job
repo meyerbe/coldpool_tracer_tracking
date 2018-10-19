@@ -5,24 +5,26 @@
 ##########################
 # SET PATH
 #
-JOBNAME='test1plus4K_circle' #'lindp2K'
-#FIN=/nbi/ac/conv1/henneb/Moseley2018/data/lind_p2K/lind_p2K_intensity.nc  
-FIN=$modelo/test1plus4K/level2/test1plus4K_budget.nc # inputfile for precipitation
-#INv=/nbi/ac/conv1/henneb/Moseley2018/data/lind_p2K/lind_p2K.out.vol.v.nc
-INv=/$modelo/test1plus4K/level1/test1plus4K.out.vol.v.nc
-#INu=/nbi/ac/conv1/henneb/Moseley2018/data/lind_p2K/lind_p2K.out.vol.u.nc
-INu=$modelo/test1plus4K/level1/test1plus4K.out.vol.u.nc
+from='lindp2K_circ_100tr' #'test1plus4K'
+JOBNAME=${from}'_ci_age'   #${from}'_circle_maxage' #'lindp2K_circ_100tr' #'test1plus4K_circle' #'lindp2K'
+FIN=/nbi/ac/conv1/henneb/Moseley2018/data/lind_p2K/lind_p2K_intensity.nc  
+#FIN=$modelo/test1plus4K/level2/test1plus4K_budget.nc # inputfile for precipitation
+INv=/nbi/ac/conv1/henneb/Moseley2018/data/lind_p2K/lind_p2K.out.vol.v.nc
+#INv=/$modelo/test1plus4K/level1/test1plus4K.out.vol.v.nc
+INu=/nbi/ac/conv1/henneb/Moseley2018/data/lind_p2K/lind_p2K.out.vol.u.nc
+#INu=$modelo/test1plus4K/level1/test1plus4K.out.vol.u.nc
 OUT=/nbi/ac/conv1/henneb/results/coldpool/${JOBNAME}/
 
 # SET PARAMETER
 cutoff=1.0                                           # cut off for precip (mm/s), use 3 strings
 mincellsize=50.                                      # minimum rain cell size, use 3 strings
-domsizex=320 #1024  #todo: needs to be changed as input in rain tracking
-domsizey=320 #1024
+domsizex=1024 #320 # 1024 #  #todo: needs to be changed as input in rain tracking
+domsizey=1024 #320 # 1024 #
 dt=300
 res=200
 lv='50'                                              # select 2D wind field
-tracer=180
+tracer=100
+age=25
 ########################
 ## MAKE NAMELIST 
 #######################
@@ -35,6 +37,7 @@ tracer=180
         -e s%@{mincellsize}%${mincellsize}%g \
         -e s%@{OUT}%${OUT}%g \
         -e s%@{tracer}%${tracer}%g \
+        -e s%@{age}%${age}%g \
        <namelist.tmp>namelist.dat
 #
 cd ..
@@ -87,8 +90,15 @@ mkdir -p ${OUT}/input/raincell
 ##
 ##
 #sort -n -k2 ${OUT}/output/raincell/irt_tracks_output_pure.txt > ${OUT}/output/raincell/irt_tracks_output_pure_sort.txt
-#ncl path=\"${OUT}\" bin/merger.ncl #makes list of merging cold pools for special treatment
+####################################################
+## or copy from another experiment with same simulation
+###################################################
 
+rsync -r $OUT/../${from}/output/raincell $OUT/output/.
+rsync -r $OUT/../${from}/input/cp $OUT/input/.
+
+
+ncl path=\"${OUT}\" bin/merger.ncl #makes list of merging cold pools for special treatment
 #sort -n -k2 ${OUT}/output/raincell/irt_tracks_output_pure.txt > ${OUT}/input/cp/tracks_body_time_sorted.txt
 
 ./bin/cp/tracer_tracking.x

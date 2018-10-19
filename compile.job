@@ -23,7 +23,7 @@ COMPILE_COMMAND='gfortran'
     ${COMPILE_COMMAND} -c $SRC/cp_parameters.f90
     cp cp_parameters.mod $BIN/cp_parameters.mod 
     cp cp_parameters.o $BIN/cp_parameters.o
-  #  ${COMPILE_COMMAND} -fbounds-check -fbacktrace -Wall -Wextra -ggdb -fcheck=all -o  $BIN/tracer_tracking.x $SRC/tracer_tracking.f90 $BIN/cp_parameters.o -L/usr/lib64/gfortran/modules/netcdf.mod -lnetcdf -lnetcdff
+    #${COMPILE_COMMAND} -fbounds-check -fbacktrace -Wall -Wextra -ggdb -fcheck=all -o  $BIN/tracer_tracking.x $SRC/tracer_tracking.f90 $BIN/cp_parameters.o -L/usr/lib64/gfortran/modules/netcdf.mod -lnetcdf -lnetcdff
     ${COMPILE_COMMAND} -o  $BIN/tracer_tracking.x $SRC/tracer_tracking.f90 $BIN/cp_parameters.o -L/usr/lib64/gfortran/modules/netcdf.mod -lnetcdf -lnetcdff
  fi  
 
