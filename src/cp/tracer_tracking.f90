@@ -85,7 +85,7 @@ count_tracer = 1 ! counts individual pixels !OCH was ist mit pixeln gemeint? der
 
 !find merging events and get number of precip cells
  i =1
- OPEN(1,FILE='mergingCPs.txt',FORM='formatted',ACTION='read',IOSTAT=ierr) 
+ OPEN(1,FILE=trim(odir) // '/input/cp/mergingCPs.txt',FORM='formatted',ACTION='read',IOSTAT=ierr) 
  IF ( ierr == 0) then
    DO
      READ(1,*,END=400) cpio(i,1), cpio(i,2)
@@ -104,7 +104,7 @@ OPEN(4,FILE=trim(odir) // '/input/cp/input_u.srv',FORM='unformatted', ACTION='re
 OPEN(5,FILE=trim(odir) // '/input/cp/input_v.srv',FORM='unformatted', ACTION='read')
 
 
-
+write(*,*) i, 'rain cells found'
 !INITIALIZE some values
 count_tracer = 1    ! number of tracer per CP
 max_no_of_cells = i ! hand number of cells
@@ -349,7 +349,7 @@ SUBROUTINE initCircle(max_no_of_cells,ts,IDstart,traced, COMx,COMy, &
    if (cpio(i,2) .ne. 0 ) then ! avoid splitting events 
 
    if (IDstart(i) == ts) then ! set new circle when precip begins
-  write(*,*) 'in i', i, IDstart(i),ts
+  !write(*,*) 'in i', i, IDstart(i),ts
 
      !reff = sqrt(area(i))/pi 
       do j = 1,max_tracer_CP,1 ! loop trough tracer number

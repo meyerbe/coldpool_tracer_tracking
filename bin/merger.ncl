@@ -69,7 +69,7 @@ end do
         outputtxt(0)    = " "
         outputtxt(1::)  = matrix
 
-        asciiwrite("mergingCPs.txt",matrix);zu pdf zusammenfügen
+        asciiwrite(path+"input/cp/mergingCPs.txt",matrix);zu pdf zusammenfügen
 
 
 end
