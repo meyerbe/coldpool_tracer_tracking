@@ -74,12 +74,13 @@ INTEGER              :: count_tracer             ! counts the internal tracer in
 
 !INITIALIZE some values
 namelist /INPUTgeneral/ dsize_x, dsize_y, dt, res 
-namelist /INPUTtracer/ max_tracer_CP
+namelist /INPUTtracer/ max_tracer_CP, max_age
 namelist /INPUTIO/ odir
 open(100,file='job/namelist.dat')
 read(100,nml=INPUTgeneral)
 read(100,nml=INPUTIO)
 read(100,nml=INPUTtracer)
+
 
 count_tracer = 1 ! counts individual pixels !OCH was ist mit pixeln gemeint? der
 
@@ -743,7 +744,7 @@ END SUBROUTINE
 
 SUBROUTINE write_output(traced,max_tracers,count_tracer,timestep,tracpo,&
                        max_no_of_cells)
-USE  cp_parameters, ONLY :max_tracer_CP
+USE  cp_parameters, ONLY :max_tracer_CP, max_age
   INTEGER, INTENT(IN)       :: count_tracer,max_tracers, timestep, &
                                max_no_of_cells !, max_tracer_CP 
   INTEGER                   :: it
@@ -765,7 +766,7 @@ write(*,*) INT(traced(tracpo(1,it),tracpo(2,it),3)),INT(traced(tracpo(1,it),trac
   ! updating previous tracers
   DO WHILE (it .LT. count_tracer)
     IF (traced(tracpo(1,it),tracpo(2,it),11)  .eq. 1.) THEN  !trace only if tracer is active
-          IF(INT(traced(tracpo(1,it),tracpo(2,it),7)) .le. 36)then   ! output only up to  3hours
+          IF(INT(traced(tracpo(1,it),tracpo(2,it),7)) .le. max_age)then   ! output only up to  3hours
             WRITE(40,150) INT(timestep),INT(traced(tracpo(1,it),tracpo(2,it),7)),& !timestep, age
                         it,INT(traced(tracpo(1,it),tracpo(2,it),12)),& !tracer and CP ID
                         traced(tracpo(1,it),tracpo(2,it),1),traced(tracpo(1,it),tracpo(2,it),2),& !pos 1-2

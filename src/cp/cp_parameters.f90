@@ -1,10 +1,10 @@
 MODULE cp_parameters
 implicit none
 
-INTEGER               :: dsize_x
-INTEGER               :: dsize_y 
-INTEGER               :: max_tracer_CP
-REAL                  :: res  ! resolution in m
-REAL                  :: dt ! time step in sec
+INTEGER               :: dsize_x, dsize_y  ! domain size
+INTEGER               :: max_age           ! max # of timesteps for tracking one CP
+INTEGER               :: max_tracer_CP     ! # of tracer per CP
+REAL                  :: res               ! resolution in m
+REAL                  :: dt                ! time step in sec
 CHARACTER(LEN=100)    :: odir
 END MODULE cp_parameters
