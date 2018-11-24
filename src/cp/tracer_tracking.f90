@@ -29,13 +29,13 @@
 ! traced(:,:, 8)   angle to COG
 ! traced(:,:, 9)   CP ID
 ! traced(:,:,10)   gloabl tracer number 
-! traced(:,:,11)   active 1-0  
+! traced(:,:,11)   active 0-1 
 ! traced(:,:,12)   start time of tracer 
 ! traced(:,:,13)   u 
 ! traced(:,:,14)   v
-! traced(:,:,15) 
-! traced(:,:,16)   if vel has reduced
-! traced(:,:,17)   if precip is ongoing
+! traced(:,:,15)   distance from tracer to cog in x direction 
+! traced(:,:,16)   merger 
+! traced(:,:,17)   distance from tracer to cog in x direction
 PROGRAM cp_tracking
 
 USE netcdf
@@ -100,7 +100,6 @@ count_tracer = 1 ! counts individual pixels !OCH was ist mit pixeln gemeint? der
 
 OPEN(2,FILE=trim(odir) // '/output/raincell/irt_tracks_mask.srv',    FORM='unformatted', ACTION='read')
 OPEN(40,FILE=trim(odir) // '/output/cp/coldpool_tracer_out.txt',FORM='formatted', ACTION='write')
-!write(*,*) trim(odir) // '/input/cp/input_u.srv'
 OPEN(4,FILE=trim(odir) // '/input/cp/input_u.srv',FORM='unformatted', ACTION='read')
 OPEN(5,FILE=trim(odir) // '/input/cp/input_v.srv',FORM='unformatted', ACTION='read')
 
@@ -145,7 +144,7 @@ timestep=-1 !OCH why -1 !-1
  onset = tts
  DO !start main loop
 ! only for testing
-   traced(:,:,16) = 0  ! set ongoing precip 0 
+   traced(:,:,11) = 0  ! set ongoing precip 0 
    timestep=timestep+1 ! OCH: starts with 0 ?
    write(*,*) 'timestep', timestep , 'onset', onset
    if (IDstart(ID) .eq. 0) IDstart(ID) = tts !new CP 
@@ -164,7 +163,7 @@ timestep=-1 !OCH why -1 !-1
      COMy(ID) = yCOG
      !area(ID) = areain
      DO WHILE (tts .eq. timestep ) !as long as CPs at the same tiemstep are read
-       traced(ID,:,16) = 1 ! precip is ongoing
+       traced(ID,:,11) = 1 ! precip is ongoing
        !READ(3,153,END=200)  ID, tts, areain, xcog,ycog ! read next line 
        READ(3,153,END=200)  ID, tts, xcog,ycog ! read next line 
 
@@ -197,9 +196,12 @@ timestep=-1 !OCH why -1 !-1
 !     CALL set_tracer(nneighb, track_numbers,max_no_of_cells, &
 !        timestep,traced, &
 !        count_tracer,already_tracked,tracpo,max_tracers,cpio)
-     CALL update_tracer(vel(:,:,1),vel(:,:,2),timestep,traced, count_tracer, &
+     CALL velocity_interpol(vel(:,:,1),vel(:,:,2),timestep,traced, count_tracer, &
                         max_no_of_cells,tracpo,max_tracers)
-     CALL geometry(traced,COMx,COMy,already_tracked,max_no_of_cells) 
+     CALL geometry(traced,COMx,COMy,already_tracked,max_no_of_cells)
+!     CALL update_tracer(vel(:,:,1),vel(:,:,2),timestep,traced, count_tracer, &
+!                        max_no_of_cells,tracpo,max_tracers)
+!     CALL geometry(traced,COMx,COMy,already_tracked,max_no_of_cells) 
 
      DO i =1,max_no_of_cells ! loop trough all cps with tracer
        IF (already_tracked(i) .gt. 1 ) THEN
@@ -207,7 +209,7 @@ timestep=-1 !OCH why -1 !-1
          traced_dummy(:,:) = 0.
          traced_dummy = traced(i,:,:)
          CALL sort(traced_dummy(1:already_tracked(i),:),already_tracked(i))
-!         if (traced(i,1,16)  .eq. 0) then !stop tracer only if precip has stoped
+!         if (traced(i,1,11)  .eq. 0) then !stop tracer only if precip has stoped
            CALL oneside(traced_dummy(1:already_tracked(i),8),traced(i,:,:),already_tracked(i))
 !         end if
        END IF
@@ -215,7 +217,10 @@ timestep=-1 !OCH why -1 !-1
      !CALL time_dev(traced,traced_prev,max_no_of_cells,max_tracer_CP,count_tracer,tracpo,max_tracers)
      traced_prev = traced
      CALL write_output(traced,max_tracers,count_tracer,timestep,tracpo,&
-                       max_no_of_cells)
+                       max_no_of_cells,COMx,COMy)
+     CALL update_tracer(vel(:,:,1),vel(:,:,2),timestep,traced, count_tracer, &
+                        max_no_of_cells,tracpo,max_tracers)
+
    END IF ! if onset is reached  
  END DO
  200 CONTINUE
@@ -350,31 +355,35 @@ SUBROUTINE initCircle(max_no_of_cells,ts,IDstart,traced, COMx,COMy, &
    if (cpio(i,2) .ne. 0 ) then ! avoid splitting events 
 
    if (IDstart(i) == ts) then ! set new circle when precip begins
-  !write(*,*) 'in i', i, IDstart(i),ts
 
      !reff = sqrt(area(i))/pi 
       do j = 1,max_tracer_CP,1 ! loop trough tracer number
         tracpo(:,count_tracer)=(/i,j/)
         count_tracer           = count_tracer + 1
-
         traced(i,j, 1) = MOD(COMx(i) + rmax(i)*cos(j*inc)-1.,float(dsize_x))+1.
         traced(i,j, 2) = MOD(COMy(i) + rmax(i)*sin(j*inc)-1.,float(dsize_y))+1.
-        !traced(i,j, 3) = nint(traced(i,j,1))
-        !traced(i,j, 4) = nint(traced(i,j,2))
-        !traced(i,j, 5) = rmax(i)
         traced(i,j, 6) = ts ! current time
-        traced(i,j, 7) = 0   ! age 
+        if (cpio(i,1) .ne. cpio(i,2)) then
+          traced(i,j,16) =1 
+          traced(i,j,7) = traced(cpio(i,2),j,7)  !set to age that the larger event of the merger has 
+        else
+          traced(i,j, 7) = 0   ! age 
+        end if
         !traced(i,j, 8) = j*inc 
         traced(i,j, 9) = i 
-        traced(i,j,10) = 0 
+        traced(i,j,10) = count_tracer 
         traced(i,j,11) = 1   ! active tracer 
-        traced(i,j,12) = cpio(i,2)  ! start 
+        traced(i,j,12) = traced(cpio(i,2),1,12)  ! start 
         !traced(i,j,13) = 0   ! u 
         !traced(i,j,14) = 0   ! v
       end do
    end if
    end if
-   !write(*,*) traced(i,j, 1),traced(i,j, 2) 
+  end do
+  do i = 1,max_no_of_cells,1
+    if (cpio(i,1) .ne. cpio(i,2)) then
+      traced(i,:,12) = traced(cpio(i,2),1,12)
+    end if
   end do
 END SUBROUTINE 
 
@@ -397,7 +406,6 @@ USE cp_parameters, ONLY : dsize_x, dsize_y,max_tracer_CP
   INTEGER, INTENT(INOUT)    :: count_tracer
   INTEGER                   :: ix, iy
   INTEGER, INTENT(INOUT)    :: already_tracked(max_no_of_cells)
-!write(*,*) "start routine set_tracer"
   DO iy=1, dsize_y
     DO ix=1, dsize_x
       IF (nneighb(ix,iy) .EQ. 1 ) THEN ! precip edge found
@@ -464,6 +472,80 @@ END SUBROUTINE set_tracer
 !--------------------------------------------------------------------------------------
 ! UPDATE TRACER along the horizontal wind field
 !-----------------------------------------------------------------------------------
+SUBROUTINE velocity_interpol(velx,vely,timestep,traced, count_tracer,max_no_of_cells,tracpo,max_tracers)
+USE cp_parameters, ONLY : dsize_x, dsize_y, res, dt, max_tracer_CP
+
+  INTEGER, INTENT(IN)       :: timestep,max_no_of_cells, max_tracers
+  REAL, INTENT(IN)          :: velx(dsize_x,dsize_y), &
+                               vely(dsize_x,dsize_y)
+  INTEGER, INTENT(IN)       :: count_tracer !,max_tracer_CP
+  !INTEGER, INTENT(IN)       :: cp_field(dsize_x,dsize_y)
+  INTEGER                   :: tracer_ts, it
+  REAL, INTENT(INOUT)       :: traced(max_no_of_cells,max_tracer_CP,18)
+  REAL                      :: ix_new, iy_new, vx_intp, vy_intp
+  REAL                      :: ix, iy, ixt, iyt    !t are half level (interface)
+!  INTEGER                   :: ix_round, iy_round, &
+  INTEGER                   :: ix_new_round, iy_new_round, start_time
+  INTEGER                   :: ix_l, iy_l, ix_r, iy_r
+  REAL                      :: wgt_x, wgt_y, wgt_xt, wgt_yt
+  INTEGER, INTENT(IN)       :: tracpo(2,max_tracers)
+  INTEGER                   :: sub_dt   ! subtimstepping
+
+ sub_dt =60 ! update evry min
+  it = 1 ! counter trough traced
+  DO WHILE (it .LT. count_tracer) ! count tracer are all tracers set until here
+
+    ! determining the first time step of the event
+     start_time=INT(traced(tracpo(1,it),tracpo(2,it),6))
+     ! determining how many timesteps have passed since then
+     tracer_ts =timestep-start_time+1
+
+     ! getting the previous positions
+     ix=traced(tracpo(1,it),tracpo(2,it),1)
+     iy=traced(tracpo(1,it),tracpo(2,it),2) ! position in gridpoints
+
+     !for u-Wind defined on xt (half level in x direction)
+     ixt = ix-0.5
+
+     wgt_xt  = MOD(ixt,1.)
+     wgt_y  = MOD(iy,1.)
+
+     ix_l = MOD(INT(ixt-wgt_xt)-1+dsize_x,dsize_x)+1
+     iy_l = MOD(INT(iy-wgt_y)-1+dsize_y,dsize_y)+1
+
+     ix_r = MOD(ix_l +dsize_x,dsize_x)+1
+     iy_r = MOD(iy_l +dsize_y,dsize_y)+1
+
+     vx_intp = velx(ix_l,iy_l)*(1-wgt_xt)*(1-wgt_y) &
+             + velx(ix_l,iy_r)*(1-wgt_xt)*(  wgt_y) &
+             + velx(ix_r,iy_l)*(  wgt_xt)*(1-wgt_y) &
+             + velx(ix_r,iy_r)*(  wgt_xt)*(  wgt_y)
+
+     !for v-Wind defined on xt (half level in x direction)
+     iyt = iy-0.5
+
+     wgt_x  = MOD(ix,1.)
+     wgt_yt  = MOD(iyt,1.)
+
+     ix_l = MOD(INT(ix-wgt_x)-1+dsize_x,dsize_x)+1
+     iy_l = MOD(INT(iyt-wgt_yt)-1+dsize_y,dsize_y)+1
+
+     ix_r = MOD(ix_l +dsize_x,dsize_x)+1
+     iy_r = MOD(iy_l +dsize_y,dsize_y)+1
+
+     vy_intp = vely(ix_l,iy_l)*(1-wgt_x)*(1-wgt_yt) &
+             + vely(ix_l,iy_r)*(1-wgt_x)*(  wgt_yt) &
+             + vely(ix_r,iy_l)*(  wgt_x)*(1-wgt_yt) &
+             + vely(ix_r,iy_r)*(  wgt_x)*(  wgt_yt)
+
+     !save the velocities of the tracer
+     traced(tracpo(1,it),tracpo(2,it),13) = vx_intp
+     traced(tracpo(1,it),tracpo(2,it),14) = vy_intp
+     it = it+1
+   END DO
+  RETURN
+END SUBROUTINE velocity_interpol 
+
 SUBROUTINE update_tracer(velx,vely,timestep,traced, count_tracer,max_no_of_cells,tracpo,max_tracers)
 !OCH TO DO: dt and resolution should be parameter read by USE from module
 USE cp_parameters, ONLY : dsize_x, dsize_y, res, dt, max_tracer_CP
@@ -483,7 +565,6 @@ USE cp_parameters, ONLY : dsize_x, dsize_y, res, dt, max_tracer_CP
   REAL                      :: wgt_x, wgt_y, wgt_xt, wgt_yt
   INTEGER, INTENT(IN)       :: tracpo(2,max_tracers)
   INTEGER                   :: sub_dt   ! subtimstepping
-!write(*,*) "start routine update_tracer"
   sub_dt =60 ! update evry min
   it = 1 ! counter trough traced
   DO WHILE (it .LT. count_tracer) ! count tracer are all tracers set until here
@@ -590,50 +671,75 @@ USE cp_parameters, ONLY : dsize_x, dsize_y, max_tracer_CP
   INTEGER                   :: i,j
   INTEGER, INTENT(INOUT)    :: already_tracked(max_no_of_cells)
   REAL, INTENT(IN)          :: COMx(max_no_of_cells),COMy(max_no_of_cells)
-!write(*,*) "start routine geometry"
    pi = 2.*asin(1.)
   ! move COG into middle of center first 
   dx = INT(dsize_x)/2 - INT(COMx)
   dy = INT(dsize_y)/2 - INT(COMy)
-
+  
   DO i = 1,max_no_of_cells ! loop trough every cp
-   IF (already_tracked(i) .gt. 0) THEN ! do only sth if there are already tracerfor the CP
-    DO j=1,already_tracked(i)
+!   IF (already_tracked(i) .gt. 0) THEN ! do only sth if there are already tracerfor the CP
+    do j = 1,max_tracer_CP,1
+    !DO j=1,already_tracked(i)
       ! shift to center
       traced(i,j,1) = mod(traced(i,j,1)+dx(i)-1+dsize_x,float(dsize_x))+1
       traced(i,j,2) = mod(traced(i,j,2)+dy(i)-1+dsize_y,float(dsize_y))+1
 
       DELTAx(i,j) = traced(i,j,1) -dsize_x/2. !(COMx(i)+dx(i))-1.
       DELTAy(i,j) = traced(i,j,2) -dsize_y/2. !(COMy(i)+dy(i))-1 !dsize_y/2.
+      traced(i,j,15) = DELTAx(i,j)
+      traced(i,j,17) = DELTAy(i,j)
+
 !      DELTAx(i,j) = traced(i,j,1) -COMx(i)-1. !dsize_x/2.
 !      !mod(traced(i,j,1) -COMx(i)-1.+dsize_x,dsize_x)+1.
 !      DELTAy(i,j) = traced(i,j,2) -COMy(i)-1. !dsize_y/2.
 !      !mod(traced(i,j,2) - COMy(i)-1.+dsize_y,dsize_y)+1.
 
+!      IF      (DELTAx(i,j) .gt. 0 .and. DELTAy(i,j) .gt. 0) THEN
+!       traced(i,j,8) = atan(DELTAx(i,j)/DELTAy(i,j))
+!      ELSE IF (DELTAx(i,j) .gt. 0 .and. DELTAy(i,j) .lt. 0) THEN  ! 2nd
+!       traced(i,j,8) = atan(DELTAx(i,j)/DELTAy(i,j)) + pi
+!      ELSE IF (DELTAx(i,j) .lt. 0 .and. DELTAy(i,j) .lt. 0) THEN  ! 3nd
+!       traced(i,j,8) = atan(DELTAx(i,j)/DELTAy(i,j)) + pi
+!      ELSE IF (DELTAx(i,j) .lt. 0 .and. DELTAy(i,j) .gt. 0) THEN  ! 4nd
+!       traced(i,j,8) = atan(DELTAx(i,j)/DELTAy(i,j)) +2.* pi
+!      ELSE IF (DELTAx(i,j) .gt. 0 .and. DELTAy(i,j) .eq. 0)THEN
+!       traced(i,j,8) = pi/2.
+!      ELSE IF (DELTAx(i,j) .lt. 0 .and. DELTAy(i,j) .eq. 0) THEN
+!       traced(i,j,8) = (3./2.) * pi
+!      ELSE IF (DELTAx(i,j) .eq. 0 .and. DELTAy(i,j) .gt. 0) THEN
+!       traced(i,j,8) = 0.
+!      ELSE IF (DELTAx(i,j) .eq. 0 .and. DELTAy(i,j) .lt. 0) THEN
+!       traced(i,j,8) =  pi
+!      END IF
       IF      (DELTAx(i,j) .gt. 0 .and. DELTAy(i,j) .gt. 0) THEN
-       traced(i,j,8) = atan(DELTAx(i,j)/DELTAy(i,j))
-      ELSE IF (DELTAx(i,j) .gt. 0 .and. DELTAy(i,j) .lt. 0) THEN  ! 2nd
-       traced(i,j,8) = atan(DELTAx(i,j)/DELTAy(i,j)) + pi
+       traced(i,j,8) = atan(DELTAy(i,j)/DELTAx(i,j))
+
+      ELSE IF (DELTAx(i,j) .lt. 0 .and. DELTAy(i,j) .gt. 0) THEN  ! 2nd
+       traced(i,j,8) = atan(abs(DELTAx(i,j))/DELTAy(i,j)) + 1./2.*pi
+
       ELSE IF (DELTAx(i,j) .lt. 0 .and. DELTAy(i,j) .lt. 0) THEN  ! 3nd
-       traced(i,j,8) = atan(DELTAx(i,j)/DELTAy(i,j)) + pi
-      ELSE IF (DELTAx(i,j) .lt. 0 .and. DELTAy(i,j) .gt. 0) THEN  ! 4nd
-       traced(i,j,8) = atan(DELTAx(i,j)/DELTAy(i,j)) +2.* pi
+       traced(i,j,8) = atan(DELTAy(i,j)/DELTAx(i,j)) + pi
+
+      ELSE IF (DELTAx(i,j) .gt. 0 .and. DELTAy(i,j) .lt. 0) THEN  ! 4nd
+       traced(i,j,8) = atan(abs(DELTAx(i,j))/abs(DELTAy(i,j))) +3./2.* pi
+
       ELSE IF (DELTAx(i,j) .gt. 0 .and. DELTAy(i,j) .eq. 0)THEN
-       traced(i,j,8) = pi/2.
-      ELSE IF (DELTAx(i,j) .lt. 0 .and. DELTAy(i,j) .eq. 0) THEN
-       traced(i,j,8) = (3./2.) * pi
-      ELSE IF (DELTAx(i,j) .eq. 0 .and. DELTAy(i,j) .gt. 0) THEN
        traced(i,j,8) = 0.
-      ELSE IF (DELTAx(i,j) .eq. 0 .and. DELTAy(i,j) .lt. 0) THEN
+
+      ELSE IF (DELTAx(i,j) .lt. 0 .and. DELTAy(i,j) .eq. 0) THEN
        traced(i,j,8) =  pi
+
+      ELSE IF (DELTAx(i,j) .eq. 0 .and. DELTAy(i,j) .gt. 0) THEN
+       traced(i,j,8) = 1./2. *pi
+      ELSE IF (DELTAx(i,j) .eq. 0 .and. DELTAy(i,j) .lt. 0) THEN
+       traced(i,j,8) =  3./2.* pi
       END IF
-      traced(i,j,5) = sqrt(DELTAx(i,j)**2.+DELTAy(i,j)**2.)
+      traced(i,j,5) = sqrt(DELTAy(i,j)**2.+DELTAx(i,j)**2.)
       ! shift back 
       traced(i,j,1) = mod(traced(i,j,1)-dx(i)-1+float(dsize_x),float(dsize_x))+1
       traced(i,j,2) = mod(traced(i,j,2)-dy(i)-1+float(dsize_y),float(dsize_y))+1
-
      END DO
-    END IF
+!    END IF
    END DO
 END SUBROUTINE geometry
 
@@ -665,6 +771,7 @@ SUBROUTINE sort(traced_dummy,jc)
  j=1
   ! updating previous tracers
   DO WHILE (j .LT. jc)
+
     WRITE(50,200) INT(traced_dummy(j,6)), INT(traced_dummy(j,9)), & !timestep,CP ID
                   traced_dummy(j,1), traced_dummy(j,2),traced_dummy(j,3), &!position
                   traced_dummy(j,4), traced_dummy(j,5), traced_dummy(j,10)!, &
@@ -733,9 +840,9 @@ USE  cp_parameters, ONLY :max_tracer_CP
             +traced(tracpo(1,it),tracpo(2,it),14)**2)
      dv = v0-v1
      if (dv .gt. 1.) THEN !decelerate
-      traced(tracpo(1,it),tracpo(2,it),16) = 1
+      traced(tracpo(1,it),tracpo(2,it),11) = 1
      !if accelerated and decelerated already before 
-     else if (dv .lt. 1. .and. traced(tracpo(1,it),tracpo(2,it),16) .eq. 1) THEN
+     else if (dv .lt. 1. .and. traced(tracpo(1,it),tracpo(2,it),11) .eq. 1) THEN
        traced(tracpo(1,it),tracpo(2,it),11) = 0  ! set tracer inactive 
      end if
      it = it+1
@@ -743,26 +850,24 @@ USE  cp_parameters, ONLY :max_tracer_CP
 END SUBROUTINE
 
 SUBROUTINE write_output(traced,max_tracers,count_tracer,timestep,tracpo,&
-                       max_no_of_cells)
+                       max_no_of_cells,COMx,COMy)
 USE  cp_parameters, ONLY :max_tracer_CP, max_age
   INTEGER, INTENT(IN)       :: count_tracer,max_tracers, timestep, &
                                max_no_of_cells !, max_tracer_CP 
   INTEGER                   :: it
   INTEGER,INTENT(IN)        :: tracpo(2,max_tracers)
   REAL, INTENT(INOUT)       :: traced(max_no_of_cells, max_tracer_CP,18)
-
-!write(*,*) "start routine write_output"
+  REAL, INTENT(IN)          :: COMx(max_no_of_cells), COMy(max_no_of_cells)
   it=1
-write(*,*) tracpo(1,it) 
-write(*,*) INT(traced(tracpo(1,it),tracpo(2,it),3)),INT(traced(tracpo(1,it),tracpo(2,it),4))
 
   150 FORMAT    (2(4X,I4),    & !timestep, age
                 2X,I6, 4X,I4, & !tracer and CP ID
                 2(2X,F10.5),  & !pos 1-2
                 2(4X,I4),     & !rounded
                 2(2X,F7.3),   & !distance and angle
-                2(2X,F7.3))     !velocity                
-
+                2(2X,F8.2),   & !velocity                
+                2(2X,F8.2),   & !x dist
+                2(2X,F8.2))     !COG
   ! updating previous tracers
   DO WHILE (it .LT. count_tracer)
     IF (traced(tracpo(1,it),tracpo(2,it),11)  .eq. 1.) THEN  !trace only if tracer is active
@@ -772,7 +877,9 @@ write(*,*) INT(traced(tracpo(1,it),tracpo(2,it),3)),INT(traced(tracpo(1,it),trac
                         traced(tracpo(1,it),tracpo(2,it),1),traced(tracpo(1,it),tracpo(2,it),2),& !pos 1-2
                         INT(traced(tracpo(1,it),tracpo(2,it),3)),INT(traced(tracpo(1,it),tracpo(2,it),4)),& !rounded
                         traced(tracpo(1,it),tracpo(2,it),5),traced(tracpo(1,it),tracpo(2,it),8),& !distance and angle
-                        traced(tracpo(1,it),tracpo(2,it),13),traced(tracpo(1,it),tracpo(2,it),14)
+                        traced(tracpo(1,it),tracpo(2,it),13),traced(tracpo(1,it),tracpo(2,it),14),& ! u, v Wind component
+                        traced(tracpo(1,it),tracpo(2,it),15),traced(tracpo(1,it),tracpo(2,it),17),& ! x and y distance  
+                        COMx(tracpo(1,it)), COMy(tracpo(1,it))                                             ! center
     END IF
 
           END IF
