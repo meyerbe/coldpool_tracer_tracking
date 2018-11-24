@@ -364,10 +364,11 @@ SUBROUTINE initCircle(max_no_of_cells,ts,IDstart,traced, COMx,COMy, &
         traced(i,j, 2) = MOD(COMy(i) + rmax(i)*sin(j*inc)-1.,float(dsize_y))+1.
         traced(i,j, 6) = ts ! current time
         if (cpio(i,1) .ne. cpio(i,2)) then
-          traced(i,j,16) =1 
+          traced(i,j,16) =0 
           traced(i,j,7) = traced(cpio(i,2),j,7)  !set to age that the larger event of the merger has 
         else
           traced(i,j, 7) = 0   ! age 
+          traced(i,j, 16) = 1
         end if
         !traced(i,j, 8) = j*inc 
         traced(i,j, 9) = i 
@@ -867,7 +868,9 @@ USE  cp_parameters, ONLY :max_tracer_CP, max_age
                 2(2X,F7.3),   & !distance and angle
                 2(2X,F8.2),   & !velocity                
                 2(2X,F8.2),   & !x dist
-                2(2X,F8.2))     !COG
+                2(2X,F8.2),   & !COG
+                1(2X,I1),     & ! merger
+                1(2X,I4))       ! precip ID
   ! updating previous tracers
   DO WHILE (it .LT. count_tracer)
     IF (traced(tracpo(1,it),tracpo(2,it),11)  .eq. 1.) THEN  !trace only if tracer is active
@@ -879,7 +882,8 @@ USE  cp_parameters, ONLY :max_tracer_CP, max_age
                         traced(tracpo(1,it),tracpo(2,it),5),traced(tracpo(1,it),tracpo(2,it),8),& !distance and angle
                         traced(tracpo(1,it),tracpo(2,it),13),traced(tracpo(1,it),tracpo(2,it),14),& ! u, v Wind component
                         traced(tracpo(1,it),tracpo(2,it),15),traced(tracpo(1,it),tracpo(2,it),17),& ! x and y distance  
-                        COMx(tracpo(1,it)), COMy(tracpo(1,it))                                             ! center
+                        COMx(tracpo(1,it)), COMy(tracpo(1,it))                                   ,& ! center
+                        traced(tracpo(1,it),tracpo(2,it),16), traced(tracpo(1,it),tracpo(2,it),9)   ! merger, prec ID
     END IF
 
           END IF
