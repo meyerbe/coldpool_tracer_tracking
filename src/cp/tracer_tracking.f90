@@ -49,9 +49,9 @@
 ! traced(:,:,12)   start time of tracer 
 ! traced(:,:,13)   u 
 ! traced(:,:,14)   v
-! traced(:,:,15)   distance from tracer to cog in x direction 
+! traced(:,:,15)   distance from tracer to COG in x direction 
 ! traced(:,:,16)   merger 
-! traced(:,:,17)   distance from tracer to cog in x direction
+! traced(:,:,17)   distance from tracer to COG in x direction
 ! traced(:,:,18)   precip is ongoing
 ! traced(:,:,19)   vrad
 ! traced(:,:,20)   vtan
@@ -65,7 +65,7 @@ IMPLICIT NONE
 REAL, ALLOCATABLE    :: input_field(:,:)      ! eg precip field to find COGs
 REAL, ALLOCATABLE    :: vel(:,:,:)               ! velocity field
 REAL, ALLOCATABLE    :: nneighb(:,:)             ! identifier for cell boundaries
-REAL, ALLOCATABLE    :: COMx(:), COMy(:)         ! store cog
+REAL, ALLOCATABLE    :: COMx(:), COMy(:)         ! store COG
 REAL, ALLOCATABLE    :: rmax(:)                  ! area of precip
 !INTEGER, ALLOCATABLE :: IDstart(:)               ! first timestep of precip 
 REAL, ALLOCATABLE    :: track_numbers(:,:)       ! ID for precip and coldpoolsobjects
@@ -79,20 +79,17 @@ INTEGER              :: tts                      ! timestep
 !REAL                 :: areain                   ! size of precip cell
 INTEGER              :: i                        ! running index
 INTEGER              :: ierr                     ! error index for reading files
-REAL                 :: xcog, ycog               ! buffer variable for read COGs
-INTEGER              :: onset                    ! beginning of tracking
+REAL                 :: xCOG, yCOG               ! buffer variable for read COGs
+INTEGER              :: onset,begin              ! first cell reaches treshold, beginning of tracking
 INTEGER              :: max_no_of_cells          ! maximum number if CPs (can be retrieved from the number of rain cells
 !INTEGER              :: max_tracer_CP            ! max no of tracers per CP
 INTEGER              :: max_tracers              ! max no of commulative tracers 
 INTEGER,ALLOCATABLE  :: tracpo(:,:)              ! keeps track of first two indices in traced (CP ID, internal tracer ID) for every tracer 
 INTEGER              :: srv_header_input(8)
 INTEGER              :: timestep
-INTEGER              :: counter
 !INTEGER              :: ntracer
 INTEGER              :: count_tracer             ! counts the internal tracer in an individual CP
 
-!kann weg
-INTEGER   :: iiii, jjjj
 !INITIALIZE some values
 namelist /INPUTgeneral/ dsize_x, dsize_y, dt, res 
 namelist /INPUTtracer/ max_tracer_CP, max_age, rad
@@ -158,30 +155,10 @@ timestep=0
  153 FORMAT (7X,I5,9X,I3,94X,F10.4,7X,F10.4)
  onset = minval(cpio(:,3),1)  !first tracers will be set when first raincell is larger than agiven trashold
  write(*,*) 'tracer start at' , onset
- ! read everything from tracking text output that is before the first precip
- ! cells reaches minimum size for tracers, becuase everything befor is not
- ! needed 
- tts = 0
- READ(3,153,END=200)  ID, tts, xcog,ycog
- if (tts .lt. onset) then 
-   READ(2,END=200) srv_header_input
-   READ(2) track_numbers(:,:)
- end if 
+ ! read first line of precip tracking, to get first timestep of precip
+ READ(3,153,END=200)  ID, tts, xCOG, yCOG
+ begin = tts
 
- timestep = tts
- DO WHILE (tts .lt. onset)
-   READ(3,153,END=200)  ID, tts, xcog,ycog  
-   if (tts .gt. timestep .and. tts .lt. onset) then
-      READ(2,END=200) srv_header_input 
-      timestep  = tts
-      READ(2) track_numbers(:,:)
-   end if
-!read track numbers one timestep before onset is reaches
-!   READ(2,END=200) srv_header_input
- ! Also the track file must be read until the first are is large enough 
- END DO
-timestep = -1  
-!
  DO !start main loop
 ! only for testing
    traced(:,:,18) = 0  ! set ongoing precip 0 
@@ -194,8 +171,9 @@ timestep = -1
    READ (5,END=200) srv_header_input
    READ (5) vel(:,:,2)
 
-
-   IF (timestep .GE. onset) THEN !max(onset,time_step_event)) THEN
+   ! read velocity files until start of tracking is reached, if so, also read
+   ! tracking
+   IF (timestep .GE. begin) THEN !max(onset,time_step_event)) THEN
      ! store the initially read COG at first timestep 
      ! or previously read 
      COMx(ID) = xCOG
@@ -203,12 +181,10 @@ timestep = -1
      !area(ID) = areain
      DO WHILE (tts .eq. timestep ) !as long as CPs at the same tiemstep are read
        traced(ID,:,18) = 1 ! precip is ongoing
-       !READ(3,153,END=200)  ID, tts, areain, xcog,ycog ! read next line 
-       READ(3,153,END=200)  ID, tts, xcog,ycog ! read next line 
-       !if (IDstart(ID) .eq. 0) IDstart(ID) = cpio(ID,3) ! new CP
-       IF (tts .eq. timestep ) THEN ! and store cog if still at the same timestep
-         COMx(ID) = xcog
-         COMy(ID) = ycog
+       READ(3,153,END=200)  ID, tts, xCOG,yCOG ! read next line 
+       IF (tts .eq. timestep ) THEN ! and store COG if still at the same timestep
+         COMx(ID) = xCOG
+         COMy(ID) = yCOG
          !area(ID) = areain
        END IF
        ! now the next timestep is already read
@@ -221,52 +197,47 @@ timestep = -1
      READ(2,END=200) srv_header_input
      READ(2) track_numbers(:,:)
 
-     nneighb(:,:)=0
-     counter=1
-  
-     ! identification of edges
-     !CALL neigh(track_numbers,nneighb)
-     CALL maxcell(track_numbers,COMx,COMy,rmax,max_no_of_cells)
-!     CALL initCircle(max_no_of_cells,timestep,IDstart,traced, COMx,COMy,&
-!                     rmax,cpio,max_tracers,tracpo,count_tracer)
-     CALL initCircle(max_no_of_cells,timestep,traced, COMx,COMy,&
-                     rmax,cpio,max_tracers,tracpo,count_tracer)
-      ! set initial tracer at be     write(*,*) 'CALL initCIrcle'ginning of rain event
-!     CALL set_tracer(nneighb, track_numbers,max_no_of_cells, &
-!        timestep,traced, &
-!        count_tracer,already_tracked,tracpo,max_tracers,cpio(:,1:2))
-     CALL velocity_interpol(vel(:,:,1),vel(:,:,2),timestep,traced, count_tracer, &
-                        max_no_of_cells,tracpo,max_tracers)
-     CALL geometry(traced,COMx,COMy,already_tracked,max_no_of_cells)
-     CALL radvel(traced,already_tracked,max_no_of_cells)
-!     CALL update_tracer(vel(:,:,1),vel(:,:,2),timestep,traced, count_tracer, &
-!                        max_no_of_cells,tracpo,max_tracers)
-!     CALL geometry(traced,COMx,COMy,already_tracked,max_no_of_cells) 
+     IF (timestep .GE. onset) THEN !not neccesarry to call any of the routines before onset (=first track has reached minimum size for tracer tracking)  
+       ! identification of edges, and set tracer
+       nneighb(:,:)=0 
+       !CALL neigh(track_numbers,nneighb)
+       !CALL set_tracer(nneighb, track_numbers,max_no_of_cells, timestep,traced,&
+       !            count_tracer,already_tracked,tracpo,max_tracers,cpio(:,1:2))
+       
+       ! alterbative to set tracers at edges of precip, set tracer at circle
+       ! around precip
+       CALL maxcell(track_numbers,COMx,COMy,rmax,max_no_of_cells)
+       CALL initCircle(max_no_of_cells,timestep,traced, COMx,COMy,&
+                       rmax,cpio,max_tracers,tracpo,count_tracer)
 
-!     DO i =1,max_no_of_cells ! loop trough all cps with tracer
-!       IF (already_tracked(i) .gt. 1 ) THEN
-!       ! reset dummy first
-!         traced_dummy(:,:) = 0.
-!         traced_dummy = traced(i,:,:)
-!         CALL sort(traced_dummy(1:already_tracked(i),:),already_tracked(i))
-!!         if (traced(i,1,11)  .eq. 0) then !stop tracer only if precip has stoped
-!           !CALL oneside(traced_dummy(1:already_tracked(i),8),traced(i,:,:),already_tracked(i))
-!!         end if
-!       END IF
-!     END DO
-     !CALL time_dev(traced,traced_prev,max_no_of_cells,max_tracer_CP,count_tracer,tracpo,max_tracers)
-     traced_prev = traced
-     CALL write_output(traced,max_tracers,count_tracer,timestep,tracpo,&
-                       max_no_of_cells,COMx,COMy)
-!     if rad then
-!       CALL radial_update(timestep,traced,count_tracer,max_no_of_cells,tracpo,max_tracers) 
-!timestep,traced, count_tracer, &
-!                        max_no_of_cells,tracpo,max_tracers)
-!     else
-       CALL update_tracer(vel(:,:,1),vel(:,:,2),timestep,traced, count_tracer, &
-                        max_no_of_cells,tracpo,max_tracers)
-!     end if
-   END IF ! if onset is reached  
+       CALL velocity_interpol(vel(:,:,1),vel(:,:,2),timestep,traced, count_tracer, &
+                          max_no_of_cells,tracpo,max_tracers)
+       CALL geometry(traced,COMx,COMy,already_tracked,max_no_of_cells)
+       CALL radvel(traced,already_tracked,max_no_of_cells)
+  
+  !     DO i =1,max_no_of_cells ! loop trough all cps with tracer
+  !       IF (already_tracked(i) .gt. 1 ) THEN
+  !       ! reset dummy first
+  !         traced_dummy(:,:) = 0.
+  !         traced_dummy = traced(i,:,:)
+  !         CALL sort(traced_dummy(1:already_tracked(i),:),already_tracked(i))
+  !!         if (traced(i,1,11)  .eq. 0) then !stop tracer only if precip has stoped
+  !           !CALL oneside(traced_dummy(1:already_tracked(i),8),traced(i,:,:),already_tracked(i))
+  !!         end if
+  !       END IF
+  !     END DO
+       !CALL time_dev(traced,traced_prev,max_no_of_cells,max_tracer_CP,count_tracer,tracpo,max_tracers)
+       !traced_prev = traced
+       CALL write_output(traced,max_tracers,count_tracer,timestep,tracpo,&
+                         max_no_of_cells,COMx,COMy)
+  !     if rad then
+  !       CALL radial_update(timestep,traced,count_tracer,max_no_of_cells,tracpo,max_tracers) 
+  !     else
+         CALL update_tracer(vel(:,:,1),vel(:,:,2),timestep,traced, count_tracer, &
+                          max_no_of_cells,tracpo,max_tracers)
+  !     end if
+     END IF !if onset is reached
+   END IF ! if begin is reached  
  END DO
  200 CONTINUE
  WRITE(*,*) "finished main loop" 
