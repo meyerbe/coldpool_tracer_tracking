@@ -3,7 +3,9 @@
 ! read 2D velocity field (time-stepwise)
 ! read rain track cells for precipitation boundaries (timestepwise)
 ! SUBROUTINE neigh idetifies precipitation boundaries
-! SUBROUTINE set_tracer sets tracer at the boundaries 
+! SUBROUTINE set_tracer sets tracer at the boundaries
+! SUBROUTINE ....
+! SUBROUTINE ... 
 ! 
 ! 2018 Oct:
 ! change initial tracer placement from precip boundary to circles
@@ -16,6 +18,20 @@
 !      * calculate distance from one gp to another and sum it up ->
 !        circulferance    
 !      * divide by circum by no of desired tracer to get distance 
+!
+! 2018 Nov:
+! change order of CALL routine: 
+! output before update of tracer -> output of windvector match the position of
+! tracer at output now, velocities before subtimestepping
+!
+! 2018 Dec:
+! include option to track tracer base don radial velocity instead of full vector
+! output of radial and tangential velocity also included
+!
+! 2018 Dec:
+! allow precipitation tracking starting with smaller precipitation area, but set
+! tracer not untill a larger size is reached which is given in jobfile  
+! number of precipitation cells is given as input now. But can be done nicer
 !
 ! OUTPUT: 
 ! traced(CP-ID,int tracer ID, property) 
@@ -36,6 +52,9 @@
 ! traced(:,:,15)   distance from tracer to cog in x direction 
 ! traced(:,:,16)   merger 
 ! traced(:,:,17)   distance from tracer to cog in x direction
+! traced(:,:,18)   precip is ongoing
+! traced(:,:,19)   vrad
+! traced(:,:,20)   vtan
 PROGRAM cp_tracking
 
 USE netcdf
@@ -48,13 +67,13 @@ REAL, ALLOCATABLE    :: vel(:,:,:)               ! velocity field
 REAL, ALLOCATABLE    :: nneighb(:,:)             ! identifier for cell boundaries
 REAL, ALLOCATABLE    :: COMx(:), COMy(:)         ! store cog
 REAL, ALLOCATABLE    :: rmax(:)                  ! area of precip
-INTEGER, ALLOCATABLE :: IDstart(:)               ! first timestep of precip 
+!INTEGER, ALLOCATABLE :: IDstart(:)               ! first timestep of precip 
 REAL, ALLOCATABLE    :: track_numbers(:,:)       ! ID for precip and coldpoolsobjects
 INTEGER, ALLOCATABLE :: already_tracked(:)       ! memory of cell counter
 REAL, ALLOCATABLE    :: traced(:,:,:)            ! traced information, CP ID x internal tarcer ID x properties
 REAL, ALLOCATABLE    :: traced_dummy(:,:)        ! dummy to sort tracer by angle
 REAL, ALLOCATABLE    :: traced_prev(:,:,:)       ! traced information from previous timestep 
-INTEGER              :: cpio(1700,2)              ! to identify merger (dim1) and start time (dim2) splitting events have start time 0 to avoid them
+INTEGER,ALLOCATABLE  :: cpio(:,:)                ! to identify merger (dim1) and start time (dim2) splitting events have start time 0 to avoid them
 INTEGER              :: ID                       ! local ID from rain track
 INTEGER              :: tts                      ! timestep
 !REAL                 :: areain                   ! size of precip cell
@@ -72,26 +91,46 @@ INTEGER              :: counter
 !INTEGER              :: ntracer
 INTEGER              :: count_tracer             ! counts the internal tracer in an individual CP
 
+!kann weg
+INTEGER   :: iiii, jjjj
 !INITIALIZE some values
 namelist /INPUTgeneral/ dsize_x, dsize_y, dt, res 
-namelist /INPUTtracer/ max_tracer_CP, max_age
+namelist /INPUTtracer/ max_tracer_CP, max_age, rad
 namelist /INPUTIO/ odir
 open(100,file='job/namelist.dat')
 read(100,nml=INPUTgeneral)
 read(100,nml=INPUTIO)
 read(100,nml=INPUTtracer)
 
+!get number of tracked precip events
+!CALL getarg(max_no_of_cells)
+OPEN(1111,FILE='na.txt')
+READ(1111,*) max_no_of_cells
+max_tracers = max_no_of_cells*max_tracer_CP
 
-count_tracer = 1 ! counts individual pixels !OCH was ist mit pixeln gemeint? der
+! allocate fields
+ALLOCATE(cpio(max_no_of_cells,3))
+ALLOCATE(traced(max_no_of_cells,max_tracer_CP,20))
+ALLOCATE(traced_dummy(max_tracer_CP,20))
+ALLOCATE(traced_prev(max_no_of_cells,max_tracer_CP,20))
+!ALLOCATE(IDstart(max_no_of_cells))
+ALLOCATE(COMx(max_no_of_cells))
+ALLOCATE(COMy(max_no_of_cells))
+ALLOCATE(rmax(max_no_of_cells))
+ALLOCATE(vel(dsize_x,dsize_y,2))
+ALLOCATE(track_numbers(dsize_x,dsize_y))
+ALLOCATE(nneighb(dsize_x,dsize_y))
+ALLOCATE(already_tracked(max_no_of_cells))
+ALLOCATE(input_field(dsize_x,dsize_y))
+ALLOCATE(tracpo(2,max_tracers))
 
-!find merging events and get number of precip cells
+!find merging events and start of tracer
  i =1
  OPEN(1,FILE=trim(odir) // '/input/cp/mergingCPs.txt',FORM='formatted',ACTION='read',IOSTAT=ierr) 
  IF ( ierr == 0) then
    DO
-     READ(1,*,END=400) cpio(i,1), cpio(i,2)
+     READ(1,*,END=400) cpio(i,1), cpio(i,2), cpio(i,3)
      i = i +1
-
    END DO
  ELSE 
      write(*,*) 'Beim Oeffnen der Datei ist ein Fehler Nr.', ierr,' aufgetreten'
@@ -105,49 +144,49 @@ OPEN(5,FILE=trim(odir) // '/input/cp/input_v.srv',FORM='unformatted', ACTION='re
 
 
 write(*,*) i, 'rain cells found'
-!INITIALIZE some values
-count_tracer = 1    ! number of tracer per CP
-max_no_of_cells = i ! hand number of cells
-!max_tracer_CP = 800 ! maximum number of tracer per CP !automate
-max_tracers = max_no_of_cells*max_tracer_CP
-
-! allocate fields
-ALLOCATE(traced(max_no_of_cells,max_tracer_CP,18))
-ALLOCATE(traced_dummy(max_tracer_CP,18))
-ALLOCATE(traced_prev(max_no_of_cells,max_tracer_CP,18))
-ALLOCATE(IDstart(max_no_of_cells))
-ALLOCATE(COMx(max_no_of_cells))
-ALLOCATE(COMy(max_no_of_cells))
-ALLOCATE(rmax(max_no_of_cells))
-ALLOCATE(vel(dsize_x,dsize_y,2))
-ALLOCATE(track_numbers(dsize_x,dsize_y))
-ALLOCATE(nneighb(dsize_x,dsize_y)) 
-ALLOCATE(already_tracked(max_no_of_cells))
-ALLOCATE(input_field(dsize_x,dsize_y))
-ALLOCATE(tracpo(2,max_tracers))
 
 !INITIALIZE some values
 already_tracked(:) = 0
 traced(:,:,:) = 0.
 traced_prev(:,:,:) = 0.
-IDstart(:) = 0
+count_tracer = 1 ! counts individual pixels !OCH was ist mit pixeln gemeint? der
+!IDstart(:) = 0
+timestep=0 
 
-timestep=-1 !OCH why -1 !-1
 ! read when first precip is tracked
  OPEN(3,FILE=trim(odir) // '/input/cp/tracks_body_time_sorted.txt',FORM='formatted',ACTION='read')
-! 17.10.18 for circle function
-! 153 FORMAT (7X,I5,9X,I3,26X,F11.0,41X   57X,F10.4,7X,F10.4)
-! READ(3,153,END=200)  ID, tts,areain, xcog,ycog
- !write(*,*) ID, tts,areain, xcog,ycog
  153 FORMAT (7X,I5,9X,I3,94X,F10.4,7X,F10.4)
- READ(3,153,END=200)  ID, tts, xcog,ycog  
- onset = tts
+ onset = minval(cpio(:,3),1)  !first tracers will be set when first raincell is larger than agiven trashold
+ write(*,*) 'tracer start at' , onset
+ ! read everything from tracking text output that is before the first precip
+ ! cells reaches minimum size for tracers, becuase everything befor is not
+ ! needed 
+ tts = 0
+ READ(3,153,END=200)  ID, tts, xcog,ycog
+ if (tts .lt. onset) then 
+   READ(2,END=200) srv_header_input
+   READ(2) track_numbers(:,:)
+ end if 
+
+ timestep = tts
+ DO WHILE (tts .lt. onset)
+   READ(3,153,END=200)  ID, tts, xcog,ycog  
+   if (tts .gt. timestep .and. tts .lt. onset) then
+      READ(2,END=200) srv_header_input 
+      timestep  = tts
+      READ(2) track_numbers(:,:)
+   end if
+!read track numbers one timestep before onset is reaches
+!   READ(2,END=200) srv_header_input
+ ! Also the track file must be read until the first are is large enough 
+ END DO
+timestep = -1  
+!
  DO !start main loop
 ! only for testing
-   traced(:,:,11) = 0  ! set ongoing precip 0 
+   traced(:,:,18) = 0  ! set ongoing precip 0 
    timestep=timestep+1 ! OCH: starts with 0 ?
-   write(*,*) 'timestep', timestep , 'onset', onset
-   if (IDstart(ID) .eq. 0) IDstart(ID) = tts !new CP 
+   !if (IDstart(ID) .eq. 0) IDstart(ID) = cpio(ID,3) !new CP 
    track_numbers(:,:)=0 
 ! read velocity files
    READ (4,END=200) srv_header_input
@@ -163,12 +202,10 @@ timestep=-1 !OCH why -1 !-1
      COMy(ID) = yCOG
      !area(ID) = areain
      DO WHILE (tts .eq. timestep ) !as long as CPs at the same tiemstep are read
-       traced(ID,:,11) = 1 ! precip is ongoing
+       traced(ID,:,18) = 1 ! precip is ongoing
        !READ(3,153,END=200)  ID, tts, areain, xcog,ycog ! read next line 
        READ(3,153,END=200)  ID, tts, xcog,ycog ! read next line 
-
-  !write(*,*) ID, tts,areain, xcog,ycog
-       if (IDstart(ID) .eq. 0) IDstart(ID) = tts ! new CP
+       !if (IDstart(ID) .eq. 0) IDstart(ID) = cpio(ID,3) ! new CP
        IF (tts .eq. timestep ) THEN ! and store cog if still at the same timestep
          COMx(ID) = xcog
          COMy(ID) = ycog
@@ -190,37 +227,45 @@ timestep=-1 !OCH why -1 !-1
      ! identification of edges
      !CALL neigh(track_numbers,nneighb)
      CALL maxcell(track_numbers,COMx,COMy,rmax,max_no_of_cells)
-     CALL initCircle(max_no_of_cells,timestep,IDstart,traced, COMx,COMy,&
+!     CALL initCircle(max_no_of_cells,timestep,IDstart,traced, COMx,COMy,&
+!                     rmax,cpio,max_tracers,tracpo,count_tracer)
+     CALL initCircle(max_no_of_cells,timestep,traced, COMx,COMy,&
                      rmax,cpio,max_tracers,tracpo,count_tracer)
-     ! set initial tracer at beginning of rain event
+      ! set initial tracer at be     write(*,*) 'CALL initCIrcle'ginning of rain event
 !     CALL set_tracer(nneighb, track_numbers,max_no_of_cells, &
 !        timestep,traced, &
-!        count_tracer,already_tracked,tracpo,max_tracers,cpio)
+!        count_tracer,already_tracked,tracpo,max_tracers,cpio(:,1:2))
      CALL velocity_interpol(vel(:,:,1),vel(:,:,2),timestep,traced, count_tracer, &
                         max_no_of_cells,tracpo,max_tracers)
      CALL geometry(traced,COMx,COMy,already_tracked,max_no_of_cells)
+     CALL radvel(traced,already_tracked,max_no_of_cells)
 !     CALL update_tracer(vel(:,:,1),vel(:,:,2),timestep,traced, count_tracer, &
 !                        max_no_of_cells,tracpo,max_tracers)
 !     CALL geometry(traced,COMx,COMy,already_tracked,max_no_of_cells) 
 
-     DO i =1,max_no_of_cells ! loop trough all cps with tracer
-       IF (already_tracked(i) .gt. 1 ) THEN
-       ! reset dummy first
-         traced_dummy(:,:) = 0.
-         traced_dummy = traced(i,:,:)
-         CALL sort(traced_dummy(1:already_tracked(i),:),already_tracked(i))
-!         if (traced(i,1,11)  .eq. 0) then !stop tracer only if precip has stoped
-           CALL oneside(traced_dummy(1:already_tracked(i),8),traced(i,:,:),already_tracked(i))
-!         end if
-       END IF
-     END DO
+!     DO i =1,max_no_of_cells ! loop trough all cps with tracer
+!       IF (already_tracked(i) .gt. 1 ) THEN
+!       ! reset dummy first
+!         traced_dummy(:,:) = 0.
+!         traced_dummy = traced(i,:,:)
+!         CALL sort(traced_dummy(1:already_tracked(i),:),already_tracked(i))
+!!         if (traced(i,1,11)  .eq. 0) then !stop tracer only if precip has stoped
+!           !CALL oneside(traced_dummy(1:already_tracked(i),8),traced(i,:,:),already_tracked(i))
+!!         end if
+!       END IF
+!     END DO
      !CALL time_dev(traced,traced_prev,max_no_of_cells,max_tracer_CP,count_tracer,tracpo,max_tracers)
      traced_prev = traced
      CALL write_output(traced,max_tracers,count_tracer,timestep,tracpo,&
                        max_no_of_cells,COMx,COMy)
-     CALL update_tracer(vel(:,:,1),vel(:,:,2),timestep,traced, count_tracer, &
+!     if rad then
+!       CALL radial_update(timestep,traced,count_tracer,max_no_of_cells,tracpo,max_tracers) 
+!timestep,traced, count_tracer, &
+!                        max_no_of_cells,tracpo,max_tracers)
+!     else
+       CALL update_tracer(vel(:,:,1),vel(:,:,2),timestep,traced, count_tracer, &
                         max_no_of_cells,tracpo,max_tracers)
-
+!     end if
    END IF ! if onset is reached  
  END DO
  200 CONTINUE
@@ -319,9 +364,11 @@ SUBROUTINE maxcell(track_numbers,COMx,COMy,rmax,max_no_of_cells)
   REAL, INTENT(IN)       :: COMx(max_no_of_cells), COMy(max_no_of_cells)
   REAL                   :: rt, dx, dy 
   rmax(:) = 0
+  
   DO i =2,dsize_x-1
     DO j =2,dsize_y-1
       IF (track_numbers(i,j) .gt. 0) THEN
+        !write(*,*) track_numbers(i,j)
         dx = mod(i +(dsize_x/2. - COMx(int(track_numbers(i,j))))+dsize_x-1,float(dsize_x))+1  - dsize_x/2.
         dy = mod(j +(dsize_y/2. - COMy(int(track_numbers(i,j))))+dsize_y-1,float(dsize_y))+1  - dsize_y/2.
         rt = sqrt(dx**2 + dy**2) 
@@ -334,18 +381,20 @@ END SUBROUTINE maxcell
 ! Calculate  circle around COG dependent on size for initial tracer placement
 ! replaces routine neighbours
 !--------------------------------------------------------------------------------------
-SUBROUTINE initCircle(max_no_of_cells,ts,IDstart,traced, COMx,COMy, &
+!SUBROUTINE initCircle(max_no_of_cells,ts,IDstart,traced, COMx,COMy, &
+!                      rmax,cpio,max_tracers,tracpo,count_tracer)
+SUBROUTINE initCircle(max_no_of_cells,ts,traced, COMx,COMy, &
                       rmax,cpio,max_tracers,tracpo,count_tracer)
-  USE cp_parameters, ONLY : dsize_x, dsize_y,max_tracer_CP
+   USE cp_parameters, ONLY : dsize_x, dsize_y,max_tracer_CP
   
   INTEGER, INTENT(IN)       :: max_no_of_cells, max_tracers, ts
-  INTEGER, INTENT(IN)       :: IDstart(max_no_of_cells)
+!  INTEGER, INTENT(IN)       :: IDstart(max_no_of_cells)
   REAL, INTENT(IN)          :: rmax(max_no_of_cells),&
                                COMx(max_no_of_cells), COMy(max_no_of_cells)
-  INTEGER, INTENT(IN)       :: cpio(1700,2)
+  INTEGER, INTENT(IN)       :: cpio(max_no_of_cells,3)
   INTEGER, INTENT(INOUT)    :: count_tracer
   INTEGER, INTENT(INOUT)    :: tracpo(2,max_tracers)
-  REAL, INTENT(INOUT)       :: traced(max_no_of_cells,max_tracer_CP,18)
+  REAL, INTENT(INOUT)       :: traced(max_no_of_cells,max_tracer_CP,20)
   REAL                      :: pi, inc !, reff 
   INTEGER                   :: i, j
   
@@ -353,9 +402,8 @@ SUBROUTINE initCircle(max_no_of_cells,ts,IDstart,traced, COMx,COMy, &
   inc = 2*pi/max_tracer_CP
   do i = 1,max_no_of_cells,1 ! loop trough precip cells
    if (cpio(i,2) .ne. 0 ) then ! avoid splitting events 
-
-   if (IDstart(i) == ts) then ! set new circle when precip begins
-
+!   if (IDstart(i) == ts) then ! set new circle when precip begins
+   if (cpio(i,3) == ts) then ! set new circle when precip begins
      !reff = sqrt(area(i))/pi 
       do j = 1,max_tracer_CP,1 ! loop trough tracer number
         tracpo(:,count_tracer)=(/i,j/)
@@ -369,23 +417,24 @@ SUBROUTINE initCircle(max_no_of_cells,ts,IDstart,traced, COMx,COMy, &
         else
           traced(i,j, 7) = 0   ! age 
           traced(i,j, 16) = 1
+          traced(i,j,12) = cpio(i,2)
         end if
         !traced(i,j, 8) = j*inc 
         traced(i,j, 9) = i 
         traced(i,j,10) = count_tracer 
         traced(i,j,11) = 1   ! active tracer 
-        traced(i,j,12) = traced(cpio(i,2),1,12)  ! start 
+        traced(i,j,12) = cpio(i,2)  ! start 
         !traced(i,j,13) = 0   ! u 
         !traced(i,j,14) = 0   ! v
       end do
    end if
    end if
   end do
-  do i = 1,max_no_of_cells,1
-    if (cpio(i,1) .ne. cpio(i,2)) then
-      traced(i,:,12) = traced(cpio(i,2),1,12)
-    end if
-  end do
+!  do i = 1,max_no_of_cells,1
+!    if (cpio(i,1) .ne. cpio(i,2)) then
+!      traced(i,:,12) = cpio(i,2)
+!    end if
+!  end do
 END SUBROUTINE 
 
 
@@ -403,7 +452,7 @@ USE cp_parameters, ONLY : dsize_x, dsize_y,max_tracer_CP
   INTEGER, INTENT(IN)       :: max_no_of_cells, max_tracers
 !  INTEGER, INTENT(IN)       :: max_tracer_CP
   INTEGER, INTENT(INOUT)    :: tracpo(2,max_tracers)
-  REAL, INTENT(INOUT)       :: traced(max_no_of_cells,max_tracer_CP,18)
+  REAL, INTENT(INOUT)       :: traced(max_no_of_cells,max_tracer_CP,20)
   INTEGER, INTENT(INOUT)    :: count_tracer
   INTEGER                   :: ix, iy
   INTEGER, INTENT(INOUT)    :: already_tracked(max_no_of_cells)
@@ -482,7 +531,7 @@ USE cp_parameters, ONLY : dsize_x, dsize_y, res, dt, max_tracer_CP
   INTEGER, INTENT(IN)       :: count_tracer !,max_tracer_CP
   !INTEGER, INTENT(IN)       :: cp_field(dsize_x,dsize_y)
   INTEGER                   :: tracer_ts, it
-  REAL, INTENT(INOUT)       :: traced(max_no_of_cells,max_tracer_CP,18)
+  REAL, INTENT(INOUT)       :: traced(max_no_of_cells,max_tracer_CP,20)
   REAL                      :: ix_new, iy_new, vx_intp, vy_intp
   REAL                      :: ix, iy, ixt, iyt    !t are half level (interface)
 !  INTEGER                   :: ix_round, iy_round, &
@@ -557,7 +606,7 @@ USE cp_parameters, ONLY : dsize_x, dsize_y, res, dt, max_tracer_CP
   INTEGER, INTENT(IN)       :: count_tracer !,max_tracer_CP
   !INTEGER, INTENT(IN)       :: cp_field(dsize_x,dsize_y)
   INTEGER                   :: tracer_ts, it
-  REAL, INTENT(INOUT)       :: traced(max_no_of_cells,max_tracer_CP,18)
+  REAL, INTENT(INOUT)       :: traced(max_no_of_cells,max_tracer_CP,20)
   REAL                      :: ix_new, iy_new, vx_intp, vy_intp
   REAL                      :: ix, iy, ixt, iyt    !t are half level (interface)
 !  INTEGER                   :: ix_round, iy_round, &
@@ -665,7 +714,7 @@ SUBROUTINE geometry(traced,COMx,COMy,already_tracked,max_no_of_cells)
 USE cp_parameters, ONLY : dsize_x, dsize_y, max_tracer_CP
 
   INTEGER, INTENT(IN)       :: max_no_of_cells
-  REAL, INTENT(INOUT)       :: traced(max_no_of_cells,max_tracer_CP,18)
+  REAL, INTENT(INOUT)       :: traced(max_no_of_cells,max_tracer_CP,20)
   REAL                      :: DELTAx(max_no_of_cells,max_tracer_CP), &
                                DELTAy(max_no_of_cells,max_tracer_CP), pi
   INTEGER                   :: dx(max_no_of_cells), dy(max_no_of_cells) ! shift everything to have CP in thecenter
@@ -745,14 +794,85 @@ USE cp_parameters, ONLY : dsize_x, dsize_y, max_tracer_CP
 END SUBROUTINE geometry
 
 ! --------------------------------------------------------------------------------------
+! Calculate radial velocities 
+!-----------------------------------------------------------------------------------
+SUBROUTINE radvel(traced, already_tracked,max_no_of_cells)
+USE cp_parameters, ONLY : max_tracer_CP
+  INTEGER, INTENT(IN)       :: max_no_of_cells
+  REAL, INTENT(INOUT)       :: traced(max_no_of_cells,max_tracer_CP,20)
+  REAL                      :: pi
+  INTEGER                   :: i,j
+  INTEGER, INTENT(INOUT)    :: already_tracked(max_no_of_cells)
+
+  pi = 2.*asin(1.)
+  DO i = 1,max_no_of_cells ! loop trough every cp
+!   IF (already_tracked(i) .gt. 0) THEN ! do only sth if there are already
+!   tracerfor the CP
+    do j = 1,max_tracer_CP,1
+      traced(i,j,19)   = traced(i,j,13)*cos(traced(i,j,8)) + traced(i,j,14) * sin(traced(i,j,8))
+      traced(i,j,20)   = traced(i,j,14)*cos(traced(i,j,8)) - traced(i,j,13) * sin(traced(i,j,8))
+    END DO
+!    END IF
+  END DO
+ 
+END SUBROUTINE radvel
+
+! --------------------------------------------------------------------------------------
+! Update tracer along radial direction
+!-----------------------------------------------------------------------------------
+SUBROUTINE radial_update(timestep,traced,count_tracer,max_no_of_cells,tracpo,max_tracers)
+USE cp_parameters, ONLY : dsize_x, dsize_y, res, dt, max_tracer_CP
+  INTEGER, INTENT(IN)       :: timestep,max_no_of_cells, max_tracers
+  INTEGER, INTENT(IN)       :: count_tracer !,max_tracer_CP
+  !INTEGER, INTENT(IN)       :: cp_field(dsize_x,dsize_y)
+  INTEGER                   :: tracer_ts, it
+  REAL, INTENT(INOUT)       :: traced(max_no_of_cells,max_tracer_CP,20)
+  REAL                      :: ix_new, iy_new, vx_intp, vy_intp
+  REAL                      :: ix, iy, ixt, iyt    !t are half level (interface)
+!  INTEGER                   :: ix_round, iy_round, &
+  INTEGER                   :: ix_new_round, iy_new_round, start_time
+  INTEGER, INTENT(IN)       :: tracpo(2,max_tracers)
+
+  it = 1 ! counter trough traced
+  DO WHILE (it .LT. count_tracer) ! count tracer are all tracers set until here
+    ! determining the first time step of the event
+     start_time=INT(traced(tracpo(1,it),tracpo(2,it),6))
+     ! determining how many timesteps have passed since then
+     tracer_ts =timestep-start_time+1
+
+     ! getting the previous positions
+     ix=traced(tracpo(1,it),tracpo(2,it),1)
+     iy=traced(tracpo(1,it),tracpo(2,it),2) ! position in gridpoints
+     !vx_intp = vr * cos(alpha)
+     vx_intp = traced(tracpo(1,it),tracpo(2,it),19) * cos(traced(tracpo(1,it),tracpo(2,it),8))
+     vy_intp = traced(tracpo(1,it),tracpo(2,it),19) * sin(traced(tracpo(1,it),tracpo(2,it),8))
+     ix_new = MOD((ix + dt*vx_intp/res)-1.+FLOAT(dsize_x),FLOAT(dsize_x))+1.
+     iy_new = MOD((iy + dt*vy_intp/res)-1.+FLOAT(dsize_y),FLOAT(dsize_y))+1.
+
+     ix_new_round = nint(ix_new) ! maybe mod required
+     iy_new_round = nint(iy_new)
+     ! save new values for next loop
+     traced(tracpo(1,it),tracpo(2,it),1) = ix_new
+     traced(tracpo(1,it),tracpo(2,it),2) = iy_new
+     traced(tracpo(1,it),tracpo(2,it),3) = float(ix_new_round)
+     traced(tracpo(1,it),tracpo(2,it),4) = float(iy_new_round)
+
+     traced(tracpo(1,it),tracpo(2,it),6) = start_time !timestep
+     traced(tracpo(1,it),tracpo(2,it),7) = tracer_ts  !age
+     traced(tracpo(1,it),tracpo(2,it),10) = it
+     it = it + 1
+   ENDDO
+  RETURN
+END SUBROUTINE radial_update
+! --------------------------------------------------------------------------------------
 ! SORT traced 
 !-----------------------------------------------------------------------------------
 SUBROUTINE sort(traced_dummy,jc)
 
   INTEGER, INTENT(IN)      :: jc
-  REAL, INTENT(INOUT)      :: traced_dummy(jc,18)
+  REAL, INTENT(INOUT)      :: traced_dummy(jc,20)
   INTEGER                  :: j,k
-  REAL                     :: a(18)
+  REAL                     :: a(20)
  ! sort by angle for every cpID:
   ! initialize
     do j=1,jc !   count_tracer!  
@@ -789,7 +909,7 @@ SUBROUTINE oneside(tdummy,traced,tracked_no)
 
 USE  cp_parameters, ONLY :max_tracer_CP
   INTEGER, INTENT(IN)       :: tracked_no
-  REAL, INTENT(INOUT)       :: traced(max_tracer_CP,18)
+  REAL, INTENT(INOUT)       :: traced(max_tracer_CP,20)
   REAL, INTENT(IN)          :: tdummy(tracked_no)
   INTEGER                   :: j
   REAL                      :: dif 
@@ -827,8 +947,8 @@ END SUBROUTINE oneside
 !-----------------------------------------------------------------------------------
 SUBROUTINE time_dev(traced,traced_prev,max_no_of_cells,count_tracer,tracpo,max_tracers)
 USE  cp_parameters, ONLY :max_tracer_CP
-  REAL, INTENT(INOUT)       :: traced(max_no_of_cells, max_tracer_CP,18)
-  REAL, INTENT(IN)          :: traced_prev(max_no_of_cells, max_tracer_CP,18)
+  REAL, INTENT(INOUT)       :: traced(max_no_of_cells, max_tracer_CP,20)
+  REAL, INTENT(IN)          :: traced_prev(max_no_of_cells, max_tracer_CP,20)
   INTEGER, INTENT(IN)       :: tracpo(2,max_tracers)
   INTEGER, INTENT(IN)       :: max_no_of_cells, max_tracers,count_tracer !,max_tracer_CP
   REAL                      :: v0, v1, dv
@@ -883,7 +1003,7 @@ USE  cp_parameters, ONLY :max_tracer_CP, max_age
                         traced(tracpo(1,it),tracpo(2,it),13),traced(tracpo(1,it),tracpo(2,it),14),& ! u, v Wind component
                         traced(tracpo(1,it),tracpo(2,it),15),traced(tracpo(1,it),tracpo(2,it),17),& ! x and y distance  
                         COMx(tracpo(1,it)), COMy(tracpo(1,it))                                   ,& ! center
-                        traced(tracpo(1,it),tracpo(2,it),16), traced(tracpo(1,it),tracpo(2,it),9)   ! merger, prec ID
+                        INT(traced(tracpo(1,it),tracpo(2,it),16)), INT(traced(tracpo(1,it),tracpo(2,it),9))   ! merger, prec ID
     END IF
 
           END IF

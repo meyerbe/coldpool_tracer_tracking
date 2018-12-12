@@ -6,7 +6,7 @@ startzeit = 136 ;45
 ;------------------------------
 ; get tracer heade to identify self imerged events
  sim = "test1plus4K" 
- expid = "test1plus4K_circle"
+ expid = "test1plus4K_n"
  header =readAsciiTable("$results/coldpool/"+expid+"/input/cp/irt_tracks_header_sorted.txt",5,"float",0)
  IDheader     = header(:,0)   ; track ID given in header 
  startLabel   = header(:,3)   ; how does tarck starts ?
@@ -16,17 +16,17 @@ startzeit = 136 ;45
  body=readAsciiTable("$results/coldpool/"+expid+"/output/raincell/irt_tracks_output_pure.txt",12,"float",0)
 ;--- tracer data
 ; data_all   = readAsciiTable("cp_history.txt",10,"double",1)
- data_all   = readAsciiTable("$results/coldpool/"+expid+"/output/cp/coldpool_tracer_out.txt",12,"float",0) 
+ data_all   = readAsciiTable("$results/coldpool/"+expid+"/output/cp/coldpool_tracer_out.txt",18,"float",0) 
 ; data_all   = readAsciiTable("../postprocessing/tst.txt",12,"float",0)
 
  timei=0
  agei=1
  traceIDi= 2
- cpIDi = 3
+ cpIDi = 17
  Xpos = 4
  Ypos = 5
- Xgp = 7
- Ygp = 8
+ Xgp = 6
+ Ygp = 7
  data = data_all(ind(data_all(:,cpIDi) .eq. any(track0)),:)
  print("number of tracer: " +max(data(:,traceIDi)))
  print("number of cps: "+count_unique_values(data_all(:,cpIDi)))
@@ -36,9 +36,9 @@ startzeit = 136 ;45
 ;---modelo output
 ; filein = addfile("$modelo/test1plus4K/level1/test1plus4K.out.vol.t.nc","r")
 ; plotvar = filein->t(134,:,:,0)
- filein = addfile("$modelo/"+sim+"/level1/"+sim+".out.vol.u.nc","r")
+ filein = addfile("$modelo/UCLA_testdata/"+sim+"/level1/"+sim+".out.vol.u.nc","r")
  u = filein->u(startzeit-1::,:,:,0)
- filein = addfile("$modelo/"+sim+"/level1/"+sim+".out.vol.v.nc","r")
+ filein = addfile("$modelo/UCLA_testdata/"+sim+"/level1/"+sim+".out.vol.v.nc","r")
  v = filein->v(startzeit-1::,:,:,0)
 ; filein=addfile("irt_tracks_mask.nc","r")
 ; plotvar = filein->var1
@@ -55,15 +55,17 @@ startzeit = 136 ;45
   resv@vcRefMagnitudeF         = 5.0              ; make vectors larger
   resv@vcGlyphStyle            = "CurlyVector"    ; turn on curly vectors;   
   resv@vcPositionMode ="ArrowCenter"; "ArrowHead";Default: ArrowCenter (/"ArrowCenter","ArrowTail","ArrowHead"/)
-  resv@tiMainString = "Vector plot with default clipping"
+  resv@tiMainOn = False
+  ;resv@tiMainString = "Vector plot with default clipping"
+  resv@vcRefAnnoOn = False
   resv@vcRefAnnoJust = 0
   resv@vcRefAnnoSide ="Right"
   resv@vcRefAnnoParallelPosF = 1-0.6
   resv@vcRefAnnoOrthogonalPosF = -0.3
-  resv@trXMaxF =320 ; 150 ;170 ;150; 200;170; ;200
-  resv@trYMaxF =320; 150 ;240 ;210;  250;160 ;250
-  resv@trXMinF =0 ;150 ;70  ;130;  100;100;; 100
-  resv@trYMinF =0; 150 ;140 ;190;  150;90 ; 150
+  resv@trXMaxF =320 ;250 ; 150 ;170 ;150; 200;170; ;200
+  resv@trYMaxF =320; ;300; 150 ;240 ;210;  250;160 ;250
+  resv@trXMinF =0;220 ;150 ;70  ;130;  100;100;; 100
+  resv@trYMinF =0;270; 150 ;140 ;190;  150;90 ; 150
 
 ; res = True
 ; res@gsnDraw = False
@@ -90,14 +92,14 @@ startzeit = 136 ;45
  marker=new((/noCPs/),graphic)
  markers=new((/noCPs/),graphic)
  text = new((/noCPs/),graphic)
-  nmarker = 36
+  nmarker = 80
   xleg = new(nmarker,float)
-  xleg(0::4) = fspan(0.07,0.87,9) 
-  xleg(1::4) = fspan(0.07,0.87,9)    
-  xleg(2::4) = fspan(0.07,0.87,9)
-  xleg(3::4) = fspan(0.07,0.87,9)
+  xleg(0::4) = fspan(0.035,0.965,20) 
+  xleg(1::4) = fspan(0.035,0.965,20)    
+  xleg(2::4) = fspan(0.035,0.965,20)
+  xleg(3::4) = fspan(0.035,0.965,20)
 
-  xtxt = xleg+ 0.02 
+  xtxt = xleg+ 0.01 
   yleg = new(nmarker,float)
   yleg(0::4)=0.12
   yleg(1::4)=0.09
@@ -117,7 +119,7 @@ startzeit = 136 ;45
  ii = new(nmarker,integer)
 print("start main loop")
 do t = 0,dimsizes(u(:,0,0))-2  
- wks = gsn_open_wks("png","plots/circle2"+sprinti("%0.4i",t) )
+ wks = gsn_open_wks("png","plots/"+expid+"_new"+sprinti("%0.4i",t) )
 
  pl = gsn_csm_vector(wks, u(t,:,:),v(t,:,:), resv)
 
@@ -155,7 +157,6 @@ do t = 0,dimsizes(u(:,0,0))-2
      markers(i) = gsn_add_text(wks,pl,cpIDs(i),cogx,cogy,mkres)
    end if
    delete([/indcpID/])
-;print("5")
   end do
   delete(datatime)
   draw(pl)
@@ -175,7 +176,9 @@ print(ii(i))
      if (.not. ismissing(ii(i))) then
        gsres@gsMarkerColor      = cmap(mod(ii(i),30),:) 
        gsn_polymarker_ndc(wks,          xleg(i),yleg(i),gsres)
-       gsn_text_ndc(wks,cpIDs(ii(i))+" ("+not(i)+")",xtxt(i),ytxt(i),txres)
+       gsn_text_ndc(wks,cpIDs(ii(i)),xtxt(i),ytxt(i),txres)
+
+;       gsn_text_ndc(wks,cpIDs(ii(i))+" ("+not(i)+")",xtxt(i),ytxt(i),txres)
      end if
   end do
   

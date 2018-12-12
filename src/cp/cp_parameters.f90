@@ -7,4 +7,5 @@ INTEGER               :: max_tracer_CP     ! # of tracer per CP
 REAL                  :: res               ! resolution in m
 REAL                  :: dt                ! time step in sec
 CHARACTER(LEN=100)    :: odir
+logical               :: rad               ! If True tracer follow radial vel
 END MODULE cp_parameters

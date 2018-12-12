@@ -16,6 +16,7 @@ minimum_size=@{mincellsize}
 ! cp tracking
 max_tracer_CP=@{tracer},
 max_age=@{age}, !older tracer are not written
+rad =@{radv}
 !odir='output/'
 !lstopwind = False  ! stops tracer if accelerated (not working yet)
 !lstopside = True   ! stops all tracer of CP if all on one side of the precip
