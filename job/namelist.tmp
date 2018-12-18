@@ -1,7 +1,5 @@
 &INPUTgeneral
 ! general 
-dsize_x=@{nx},  !domainsize
-dsize_y=@{ny},   
 dt=@{dto},      !output timestep 
 res=@{dx},
 /  

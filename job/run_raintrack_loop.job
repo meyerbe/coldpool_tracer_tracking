@@ -1,0 +1,120 @@
+#!/bin/bash
+
+##########################
+# INPUT SETTINGS
+##########################
+# SET PATH
+
+
+#read path_root
+#JOBNAME='3D_sfc_fluxes_off/triple_3D_noise/Out_CPDry_triple_dTh3K'
+#JOBNAME='/cond1/meyerbe/ColdPools/3D_sfc_fluxes_on/single_3D_noise/dTh2_z1225_r1225'
+#JOBNAME='/cond1/meyerbe/ColdPools/3D_sfc_fluxes_on/single_3D_noise/dTh3_z1000_r1000'
+
+JOBNAME="$1"
+lv="$2" # select level of 2D wind field
+echo "level:" $lv
+radius="$3"		# radius of initial tracer circle
+echo "radius CP: " $radius
+
+#OUT=/nbi/ac/conv1/henneb/results/coldpool/${JOBNAME}/
+#OUT=/nbi/ac/cond1/meyerbe/ColdPools/${JOBNAME}/
+OUT=${JOBNAME}/
+echo ${OUT}
+
+## SET PARAMETER
+dt=100
+res=200  #res=100
+#lv=0                                            # select level of 2D wind field
+tracer=720 #360  # number of tracers
+age=40
+#rad=True
+#rad_circle1=$((radius/res + 2))
+rad_circle1=$((radius/res + 10))  # radius of initial CP = (radius+marg)*res, marg=10
+rad_circle2=$((radius/res + 15))
+echo "radius circle:" $rad_circle1 $rad_circle2
+#########################
+### MAKE NAMELIST 
+########################
+     sed \
+        -e s%@{dto}%${dt}%g \
+        -e s%@{dx}%${res}%g \
+        -e s%@{cutoff}%${cutoff}%g \
+        -e s%@{mincellsize}%${mincellsize}%g \
+        -e s%@{OUT}%${OUT}/tracer_k$lv/%g \
+        -e s%@{tracer}%${tracer}%g \
+        -e s%@{age}%${age}%g \
+        -e s%@{radv}%${radv}%g\
+       <namelist.tmp>namelist.dat
+cp namelist.dat ${OUT}/.
+cd ..
+#
+###########################
+## DIRECTORY STRUCTURE
+############################
+mkdir -p ${OUT}/tracer_k$lv/
+mkdir -p ${OUT}/tracer_k$lv/output/
+mkdir -p ${OUT}/tracer_k$lv/input/
+#
+###########################
+## JOB OUTPUT 
+##########################
+#echo 'run raincell tracking with:' > job/${JOBNAME}.o
+# to do: print date etc in job output
+#
+###################################################
+# prepare input for cold pool tracking 
+##################################################
+#
+#cdo -f srv copy ../testdata/jetzt.nc ../testdata/jetzt.nc
+#cp ../testdata/u_merged_t0_t3600_k1.srv ${OUT}/input/cp/input_u.srv
+#cp ../testdata/v_merged_t0_t3600_k1.srv ${OUT}/input/cp/input_v.srv
+
+# MAKE netcdf test-data
+# - 1 level, all times, u, v
+#for filename in ${OUT}/fields_k1/???????_kmin*.nc; do
+#  ncks -O --mk_rec_dmn time ${filename} ${filename}
+#done
+#ncecat ${OUT}/fields_k1/1000???_kmin*.nc ${OUT}/tracer_k$lv/input/uv_alltimes.nc
+#python /nbi/home/meyerbe/Documents/Code/LES_ColdPools/convert_fields_smaller_k.py ${OUT} --k0 1
+echo "convert input fields"
+python convert_fields_smaller_k.py ${OUT} --k0 $lv
+DIR_FIELDS='fields_k'$lv
+ncks -h -A ${OUT}/${DIR_FIELDS}/u_merged.nc ${OUT}/${DIR_FIELDS}/v_merged.nc
+cp ${OUT}/${DIR_FIELDS}/v_merged.nc ${OUT}/tracer_k$lv/input/uv_alltimes.nc
+
+# - correct record variable
+# - 1 level, all times, u, v
+ 
+#cdo -f srv selvar,u ../testdata/jetzt.nc ${OUT}/input/cp/input_u.srv
+#cdo -f srv selvar,v ../testdata/jetzt.nc ${OUT}/input/cp/input_v.srv
+
+#cdo -f srv sellevel,50 ${INv} ${OUT}/input/cp/input_v.srv
+#cdo -f srv sellevel,50 ${INu} ${OUT}/input/cp/input_u.srv
+#
+#
+# CP ID, start time of this CP, center x, center y, radius to start
+rm -f ${OUT}/tracer_k$lv/input/mergingCPs.txt
+# single CP
+echo 1  1  200 200 $rad_circle1 >> ${OUT}/tracer_k$lv/input/mergingCPs.txt
+echo 2  1  200 200 $rad_circle2 >> ${OUT}/tracer_k$lv/input/mergingCPs.txt
+echo 2 > na.txt  # number of CPs to track
+# triple CP
+#echo 1  1  43  50  25 >> ${OUT}/tracer_k$lv/input/mergingCPs.txt
+#echo 2  1  43 150  25 >> ${OUT}/tracer_k$lv/input/mergingCPs.txt
+#echo 3  1  130 100  25 >> ${OUT}/tracer_k$lv/input/mergingCPs.txt
+#echo 3 > na.txt  # number of CPs to track
+
+echo "run tracer tracking"
+./bin/cp/tracer_tracking_bet.x
+echo "finished tracer tracking"
+
+#######################
+# CLEANING
+####################
+cp -r job ${OUT}/tracer_k$lv/.
+#rm info.txt
+#rm mergingCPs.txt
+
+echo "starting plotting"
+ncl lvl=$lv expid=\"${OUT}\" plotting/visualisize_bettinas_tracer.ncl

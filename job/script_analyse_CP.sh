@@ -1,0 +1,86 @@
+#!bin/bash/
+
+# set range of parameters for z*, r*, th' (3 values per index)
+
+# read in parameters
+read -p "dTh: " dTh; 
+#read -p "tmin: " tmin; 
+#read -p "tmax: " tmax; 
+
+
+path="/cond1/meyerbe/ColdPools/3D_sfc_fluxes_on/single_3D_noise/"
+casename="ColdPoolDry_single_3D"
+
+if [ $dTh -eq 4 ]
+then 
+  #z_params=( 1730 870 430 )
+  #r_params=( 430 870 1730 )
+  z_params=( 870 430 )
+  r_params=( 870 1730 )
+elif [ $dTh -eq 3 ]
+then
+  #z_params=( 4000 2000 1500 1000 670 500 250 )
+  #r_params=( 250 500 670 1000 1500 2000 4000 )
+  z_params=( 1000 )
+  r_params=( 1000 )
+elif [ $dTh -eq 2 ]
+then
+  #z_params=( 2450 1225 815 )
+  #r_params=( 815 1225 2450 )
+  z_params=( 815 )
+  r_params=( 2450 )
+elif [ $dTh -eq 1 ]
+then 
+  z_params=( 3465 1730 1155 )
+  r_params=( 1155 1730 3465 )
+elif [ $dTh -eq 10 ]
+then 
+  z_params=( 2000 )
+  r_params=( 2000 )
+fi
+
+
+n_geom=${#z_params[@]}
+n_therm=${#th_params[@]}
+n_tot=$(( $n_geom*$n_therm ))
+echo "dTh:" $dTh
+echo "z-parameters:" ${z_params[@]} 
+echo "r-parameters:" ${r_params[@]}
+
+echo "#geometry parameters:" $n_geom
+
+
+
+
+echo " "
+
+count_geom=0
+k=4
+
+  while [ $count_geom -lt $n_geom ]
+  do
+    zstar=${z_params[$count_geom]}
+    rstar=${r_params[$count_geom]}
+    echo "parameters:" $zstar $rstar
+  
+    id="dTh"$dTh"_z"$zstar"_r"$rstar
+    echo $id
+  
+    fullpath=$path$id
+    echo $fullpath
+    echo " "
+
+    echo "run tracers (k="$k")"
+    ./run_raintrack_loop.job "$fullpath" $k $rstar
+
+    #echo "run tracers"
+    #./run_raintrack_bet.job
+    #./run_raintrack_bet.job "$fullpath"
+  
+    echo " "
+    ((count_geom++))
+  done
+
+
+echo "finished bash script"
+
