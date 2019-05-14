@@ -10,7 +10,9 @@
 #JOBNAME='3D_sfc_fluxes_off/triple_3D_noise/Out_CPDry_triple_dTh3K'
 #JOBNAME='/cond1/meyerbe/ColdPools/3D_sfc_fluxes_on/single_3D_noise/dTh2_z1225_r1225'
 #JOBNAME='/cond1/meyerbe/ColdPools/3D_sfc_fluxes_on/single_3D_noise/dTh3_z1000_r1000'
-JOBNAME='/3D_sfc_fluxes_on/single_3D_noise/dTh3_z1000_r1000'
+#JOBNAME='/3D_sfc_fluxes_off/single_3D_noise/run3/dTh3_z1000_r1000'
+JOBNAME='/3D_sfc_fluxes_off/single_3D_noise/run5_PE_scaling_dx100m/dTh5_z1000_r1100/'
+
 
 #JOBNAME="$1"
 #lv="$2" # select level of 2D wind field
@@ -20,8 +22,8 @@ JOBNAME='/3D_sfc_fluxes_on/single_3D_noise/dTh3_z1000_r1000'
 
 #OUT=/nbi/ac/conv1/henneb/results/coldpool/${JOBNAME}/
 OUT=/nbi/ac/cond1/meyerbe/ColdPools/${JOBNAME}/
-#OUT=${JOBNAME}/
-echo ${OUT}
+echo "path: " ${OUT}
+echo " "
 
 ## SET PARAMETER
 dt=100
@@ -30,7 +32,7 @@ lv=0                                            # select level of 2D wind field
 tracer=720 #360  # number of tracers
 age=40
 #rad=True
-#radius="$3"		# radius of initial tracer circle
+radius=12		# radius of initial tracer circle
 #########################
 ### MAKE NAMELIST 
 ########################
@@ -78,16 +80,23 @@ mkdir -p ${OUT}/tracer_k$lv/input/
 echo "convert input fields"
 python convert_fields_smaller_k.py ${OUT} --k0 $lv
 DIR_FIELDS='fields_k'$lv
+echo "1" ${OUT}/${DIR_FIELDS}
 cp ${OUT}/${DIR_FIELDS}/v_merged.nc ${OUT}/${DIR_FIELDS}/uv_alltimes.nc
+echo "2" ${OUT}/${DIR_FIELDS}
+echo ls ${OUT}/${DIR_FIELDS}/*
 #ncks -h -A ${OUT}/${DIR_FIELDS}/u_merged.nc ${OUT}/${DIR_FIELDS}/v_merged.nc
 ncks -h -A ${OUT}/${DIR_FIELDS}/u_merged.nc ${OUT}/${DIR_FIELDS}/uv_alltimes.nc
 #cp ${OUT}/${DIR_FIELDS}/v_merged.nc ${OUT}/tracer_k$lv/input/uv_alltimes.nc
+echo "3" ${OUT}/${DIR_FIELDS}
 mv ${OUT}/${DIR_FIELDS}/uv_alltimes.nc ${OUT}/tracer_k$lv/input/uv_alltimes.nc
+echo "4" ${OUT}/${DIR_FIELDS}
+echo ls ${OUT}/tracer_k$lv/input/*
+echo " "
 
 # CP ID, start time of this CP, center x, center y, radius to start
 rm -f ${OUT}/tracer_k$lv/input/mergingCPs.txt
 # single CP
-echo 1  1  200 200 20 >> ${OUT}/tracer_k$lv/input/mergingCPs.txt
+echo 1  1  200 200 $radius >> ${OUT}/tracer_k$lv/input/mergingCPs.txt
 echo 2  1  200 200 30 >> ${OUT}/tracer_k$lv/input/mergingCPs.txt
 echo 2 > na.txt  # number of CPs to track
 # triple CP
@@ -99,9 +108,9 @@ echo 2 > na.txt  # number of CPs to track
 
 ./bin/cp/tracer_tracking_bet.x
 
-#######################
+########################
 # CLEANING
-####################
+########################
 cp -r job ${OUT}/tracer_k$lv/.
 #rm info.txt
 #rm mergingCPs.txt

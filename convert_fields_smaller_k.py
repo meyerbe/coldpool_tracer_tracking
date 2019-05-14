@@ -28,12 +28,11 @@ def main():
         path_out = os.path.join(path_in, 'fields_k' + str(k0))
     else:
         k0 = -1
-    print('path: ', path_in)
     if not os.path.exists(path_out):
         os.mkdir(path_out)
-    print('')
     print('path in', path_in)
     print('path out', path_out)
+    print('path fields: ', path_fields)
     print('')
     print('k0', k0)
     print('')
@@ -58,6 +57,8 @@ def main():
     for var in var_list:
         if k0 >= 0:
             convert_file_for_singlevariable(var, files, path_fields, path_out, k0)
+    print('finished field conversion')
+    print('')
     return
 
 
@@ -77,7 +78,7 @@ def convert_file_for_singlevariable(var, files, path_fields, path_out, k0):
     # file_name = var + '_merged_t' +str(t_ini) + '_t' + str(t_end) + '_k' + str(k0) + '.nc'
     file_name = var + '_merged.nc'
     fullpath_out = os.path.join(path_out,file_name)
-    print('filename', file_name)
+    print('filename', fullpath_out)
 
     if os.path.exists(fullpath_out):
         print('')
