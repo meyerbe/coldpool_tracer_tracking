@@ -8,36 +8,44 @@ read -p "dTh: " dTh;
 #read -p "tmax: " tmax; 
 
 
-path="/cond1/meyerbe/ColdPools/3D_sfc_fluxes_on/single_3D_noise/"
+path="/cond1/meyerbe/ColdPools/3D_sfc_fluxes_off/single_3D_noise/run4/"
 casename="ColdPoolDry_single_3D"
 
-if [ $dTh -eq 4 ]
-then 
-  #z_params=( 1730 870 430 )
-  #r_params=( 430 870 1730 )
-  z_params=( 870 430 )
-  r_params=( 870 1730 )
-elif [ $dTh -eq 3 ]
+# set geometry parameters
+if [ $dTh -eq 1 ]
 then
-  #z_params=( 4000 2000 1500 1000 670 500 250 )
-  #r_params=( 250 500 670 1000 1500 2000 4000 )
-  z_params=( 1000 )
-  r_params=( 1000 )
+  z_params=( 3465 1730 1155 )  #run1
+  r_params=( 1155 1730 3465 )  #run1
 elif [ $dTh -eq 2 ]
 then
-  #z_params=( 2450 1225 815 )
-  #r_params=( 815 1225 2450 )
-  z_params=( 815 )
-  r_params=( 2450 )
-elif [ $dTh -eq 1 ]
-then 
-  z_params=( 3465 1730 1155 )
-  r_params=( 1155 1730 3465 )
-elif [ $dTh -eq 10 ]
-then 
-  z_params=( 2000 )
-  r_params=( 2000 )
+  #z_params=( 2450 1225 815 ) #run1
+  #r_params=( 815 1225 2450 ) #run1 
+  z_params=( 500 900 1600 1900 2500 ) #run2
+  r_params=( 1900 1300 900 800 600 )  #run2
+  z_params=( 1600 )
+  r_params=( 900 )
+elif [ $dTh -eq 3 ]
+then
+  #z_params=( 2000 250 500 670 1000 1500 2000 4000 ) #run1
+  #r_params=( 2000 4000 2000 1500 1000 670 500 250 ) #run1
+  #z_params=( 500 1000 1600 2000 2500 ) #run2
+  #r_params=( 1500 1000 700 600 500 )   #run2
+  z_params=( 500 1000 2000 ) #run3
+  r_params=( 1500 1000 600 ) #run3
+  z_params=( 1000 ) #run4
+  r_params=( 1000 ) #run4
+elif [ $dTh -eq 4 ]
+then
+  #z_params=( 430 870 1730 ) #run1
+  #r_params=( 1730 870 430 ) #run1
+  z_params=( 500 900 1600 2000 2500 ) #run2
+  r_params=( 1300 900 600 500 400 )   #run2
+  #z_params=( 2500 )
+  #r_params=( 400 )
 fi
+
+
+
 
 
 n_geom=${#z_params[@]}
@@ -55,7 +63,7 @@ echo "#geometry parameters:" $n_geom
 echo " "
 
 count_geom=0
-k=4
+k=0
 
   while [ $count_geom -lt $n_geom ]
   do
