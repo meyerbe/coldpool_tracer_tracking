@@ -87,7 +87,7 @@ INTEGER              :: srv_header_input(8)
 INTEGER              :: timestep
 INTEGER              :: count_tracer             ! counts the internal tracer in an individual CP
 INTEGER              :: tracking_end
-INTEGER              :: dsize_y,dsize_x
+!INTEGER              :: dsize_y,dsize_x
 !INITIALIZE some values
 namelist /INPUTgeneral/  dt, res 
 namelist /INPUTtracer/ max_tracer_CP, max_age, rad
@@ -211,6 +211,7 @@ CONTAINS
   integer, intent(out)     :: nt, nx, ny
   integer                  :: ncId, rhVarId
   integer, dimension(nf90_max_var_dims) :: dimIDs
+  write(*,*) filename
     CALL check(nf90_open(filename, nf90_NoWrite, ncid))
     CALL check(nf90_inq_varid(ncid,"u", rhVarId))
     CALL check(nf90_inquire_variable(ncid, rhVarId, dimids = dimIDs))
