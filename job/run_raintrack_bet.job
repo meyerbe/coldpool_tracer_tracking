@@ -7,12 +7,13 @@
 
 
 #read path_root
-#JOBNAME='3D_sfc_fluxes_off/triple_3D_noise/Out_CPDry_triple_dTh3K'
-#JOBNAME='/cond1/meyerbe/ColdPools/3D_sfc_fluxes_on/single_3D_noise/dTh2_z1225_r1225'
-#JOBNAME='/cond1/meyerbe/ColdPools/3D_sfc_fluxes_on/single_3D_noise/dTh3_z1000_r1000'
 #JOBNAME='/3D_sfc_fluxes_off/single_3D_noise/run3/dTh3_z1000_r1000'
-JOBNAME='/3D_sfc_fluxes_off/single_3D_noise/run6_PE_scaling_dx50m/dTh5_z1000_r500/'
-
+#JOBNAME='/3D_sfc_fluxes_off/single_3D_noise/run6_PE_scaling_dx50m/dTh5_z1000_r500/'
+JOBNAME=$1
+read -p "radius: " rad 
+read -p "dx: " res
+read -p "nx: " nx
+read -p "level: " lv
 
 #JOBNAME="$1"
 #lv="$2" # select level of 2D wind field
@@ -27,15 +28,21 @@ echo " "
 
 ## SET PARAMETER
 dt=100
-res=200  #res=100
+#res=200  #res=100
 lv=0                                            # select level of 2D wind field
 tracer=720 #360  # number of tracers
 age=40
-#rad=True
-radius=12		# radius of initial tracer circle
+center=$((nx / 2))
+echo 'center circles' $center
+radius=$((rad / res + 2))   # radius of initial tracer circle
+#radius=$2		
+radius2=$((radius + 10))
+echo 'radius circle 1' $radius
+echo 'radius circle 2' $radius2
+echo ' ' 
 #########################
 ### MAKE NAMELIST 
-########################
+#########################
      sed \
         -e s%@{dto}%${dt}%g \
         -e s%@{dx}%${res}%g \
@@ -49,20 +56,20 @@ radius=12		# radius of initial tracer circle
 cp namelist.dat ${OUT}/tracer_k$lv/.
 cd ..
 #
-###########################
+#########################
 ## DIRECTORY STRUCTURE
-############################
+#########################
 mkdir -p ${OUT}/tracer_k$lv/
 mkdir -p ${OUT}/tracer_k$lv/output/
 mkdir -p ${OUT}/tracer_k$lv/input/
 #
-###########################
+#########################
 ## JOB OUTPUT 
-##########################
+#########################
 #echo 'run raincell tracking with:' > job/${JOBNAME}.o
 # to do: print date etc in job output
 #
-###################################################
+##################################################
 # prepare input for cold pool tracking 
 ##################################################
 #
@@ -80,8 +87,10 @@ mkdir -p ${OUT}/tracer_k$lv/input/
 echo "convert input fields" ${OUT}/${DIR_FIELDS}
 python convert_fields_smaller_k.py ${OUT} --k0 $lv
 DIR_FIELDS='fields_k'$lv
+# create new file uv_alltimes.nc with both u and v variables
+# - correct record variable
+# - 1 level, all times, u, v
 cp ${OUT}/${DIR_FIELDS}/v_merged.nc ${OUT}/${DIR_FIELDS}/uv_alltimes.nc
-#ncks -h -A ${OUT}/${DIR_FIELDS}/u_merged.nc ${OUT}/${DIR_FIELDS}/v_merged.nc
 ncks -h -A ${OUT}/${DIR_FIELDS}/u_merged.nc ${OUT}/${DIR_FIELDS}/uv_alltimes.nc
 #cp ${OUT}/${DIR_FIELDS}/v_merged.nc ${OUT}/tracer_k$lv/input/uv_alltimes.nc
 mv ${OUT}/${DIR_FIELDS}/uv_alltimes.nc ${OUT}/tracer_k$lv/input/uv_alltimes.nc
@@ -90,8 +99,8 @@ echo " "
 # CP ID, start time of this CP, center x, center y, radius to start
 rm -f ${OUT}/tracer_k$lv/input/mergingCPs.txt
 # single CP
-echo 1  1  200 200 $radius >> ${OUT}/tracer_k$lv/input/mergingCPs.txt
-echo 2  1  200 200 30 >> ${OUT}/tracer_k$lv/input/mergingCPs.txt
+echo 1  1  100 100 $radius >> ${OUT}/tracer_k$lv/input/mergingCPs.txt
+echo 2  1  100 100 $radius2 >> ${OUT}/tracer_k$lv/input/mergingCPs.txt
 echo 2 > na.txt  # number of CPs to track
 # triple CP
 #echo 1  1  43  50  25 >> ${OUT}/tracer_k$lv/input/mergingCPs.txt
@@ -99,12 +108,13 @@ echo 2 > na.txt  # number of CPs to track
 #echo 3  1  130 100  25 >> ${OUT}/tracer_k$lv/input/mergingCPs.txt
 #echo 3 > na.txt  # number of CPs to track
 
-
+echo "run tracer tracking"
 ./bin/cp/tracer_tracking_bet.x
+echo "finished tracer tracking"
 
-########################
+#########################
 # CLEANING
-########################
+#########################
 cp -r job ${OUT}/tracer_k$lv/.
 #rm info.txt
 #rm mergingCPs.txt
