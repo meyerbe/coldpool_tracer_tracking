@@ -1,4 +1,4 @@
-Job repository
+Run tracer in 'job' repository:
 
 (1) run_raintrack_bet.job
 > run tracer algorithm for one simulation
