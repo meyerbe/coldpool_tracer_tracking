@@ -85,7 +85,6 @@ def convert_file_for_singlevariable(var, files, path_fields, path_out, k0):
         print('file ' + fullpath_out + ' already exists! ')
         print('')
     else:
-
         # read in test fields file
         fullpath_in = os.path.join(path_fields, files[0])
         rootgrp_in = nc.Dataset(fullpath_in, 'r')
@@ -108,13 +107,21 @@ def convert_file_for_singlevariable(var, files, path_fields, path_out, k0):
         time_out[:] = times
         var_out = rootgrp_out.createVariable(var, 'f8', ('time', 'nx', 'ny'))
 
+        data = np.zeros((nx, ny), dtype=np.double)
         for it,file in enumerate(files):
             t0 = file[:-3]
             print('file: ', file)
             fullpath_in = os.path.join(path_fields, file)
             rootgrp_in = nc.Dataset(fullpath_in, 'r')
-            data = rootgrp_in.groups['fields'].variables[var][:,:,:]
-            var_out[it, :, :] = data[:, :, k0]
+            data_ = rootgrp_in.groups['fields'].variables[var][:,:,k0]
+            if var == 'u':
+                for i in range(1, nx - 1):
+                    data[i,:] = 0.5*(data_[i,:]+data_[i-1,:])
+            elif var == 'v':
+                for j in range(1,ny-1):
+                    data[:,j] = 0.5*(data_[:,j]+data_[:,j-1])
+            del data_
+            var_out[it, :, :] = data[:, :]
 
         rootgrp_out.close()
 
