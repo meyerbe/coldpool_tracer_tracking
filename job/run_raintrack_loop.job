@@ -20,7 +20,8 @@ echo "radius CP: " $radius
 #OUT=/nbi/ac/conv1/henneb/results/coldpool/${JOBNAME}/
 #OUT=/nbi/ac/cond1/meyerbe/ColdPools/${JOBNAME}/
 OUT=${JOBNAME}/
-echo ${OUT}
+echo "path: " ${OUT}
+echo " "
 
 ## SET PARAMETER
 dt=100
@@ -35,7 +36,7 @@ rad_circle2=$((radius/res + 15))
 echo "radius circle:" $rad_circle1 $rad_circle2
 #########################
 ### MAKE NAMELIST 
-########################
+#########################
      sed \
         -e s%@{dto}%${dt}%g \
         -e s%@{dx}%${res}%g \
@@ -47,22 +48,23 @@ echo "radius circle:" $rad_circle1 $rad_circle2
         -e s%@{radv}%${radv}%g\
        <namelist.tmp>namelist.dat
 cp namelist.dat ${OUT}/.
+#cp namelist.dat ${OUT}/tracer_k$lv/.
 cd ..
 #
-###########################
+#########################
 ## DIRECTORY STRUCTURE
-############################
+#########################
 mkdir -p ${OUT}/tracer_k$lv/
 mkdir -p ${OUT}/tracer_k$lv/output/
 mkdir -p ${OUT}/tracer_k$lv/input/
 #
-###########################
+#########################
 ## JOB OUTPUT 
-##########################
+#########################
 #echo 'run raincell tracking with:' > job/${JOBNAME}.o
 # to do: print date etc in job output
 #
-###################################################
+##################################################
 # prepare input for cold pool tracking 
 ##################################################
 #
@@ -80,11 +82,14 @@ mkdir -p ${OUT}/tracer_k$lv/input/
 echo "convert input fields"
 python convert_fields_smaller_k.py ${OUT} --k0 $lv
 DIR_FIELDS='fields_k'$lv
-ncks -h -A ${OUT}/${DIR_FIELDS}/u_merged.nc ${OUT}/${DIR_FIELDS}/v_merged.nc
-cp ${OUT}/${DIR_FIELDS}/v_merged.nc ${OUT}/tracer_k$lv/input/uv_alltimes.nc
-
+# create new file uv_alltimes.nc with both u and v variables
 # - correct record variable
 # - 1 level, all times, u, v
+cp ${OUT}/${DIR_FIELDS}/v_merged.nc ${OUT}/${DIR_FIELDS}/uv_alltimes.nc
+ncks -h -A ${OUT}/${DIR_FIELDS}/u_merged.nc ${OUT}/${DIR_FIELDS}/uv_alltimes.nc
+#cp ${OUT}/${DIR_FIELDS}/v_merged.nc ${OUT}/tracer_k$lv/input/uv_alltimes.nc
+mv ${OUT}/${DIR_FIELDS}/uv_alltimes.nc ${OUT}/tracer_k$lv/input/uv_alltimes.nc
+
  
 #cdo -f srv selvar,u ../testdata/jetzt.nc ${OUT}/input/cp/input_u.srv
 #cdo -f srv selvar,v ../testdata/jetzt.nc ${OUT}/input/cp/input_v.srv
@@ -109,12 +114,13 @@ echo "run tracer tracking"
 ./bin/cp/tracer_tracking_bet.x
 echo "finished tracer tracking"
 
-#######################
+#########################
 # CLEANING
-####################
+#########################
 cp -r job ${OUT}/tracer_k$lv/.
 #rm info.txt
 #rm mergingCPs.txt
 
 echo "starting plotting"
 ncl lvl=$lv expid=\"${OUT}\" plotting/visualisize_bettinas_tracer.ncl
+echo "finish plotting"
