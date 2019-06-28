@@ -15,21 +15,14 @@ read -p "dx: " res
 read -p "nx: " nx
 read -p "level: " lv
 
-#JOBNAME="$1"
-#lv="$2" # select level of 2D wind field
-#echo "level:" $lv
-#radius="$3"		# radius of initial tracer circle
-#echo "radius: " $radius
-
-#OUT=/nbi/ac/conv1/henneb/results/coldpool/${JOBNAME}/
 OUT=/nbi/ac/cond1/meyerbe/ColdPools/${JOBNAME}/
 echo "path: " ${OUT}
 echo " "
 
-## SET PARAMETER
+## SET PARAMETERS
 dt=100
 #res=200  #res=100
-lv=0                                            # select level of 2D wind field
+#lv=0                                            # select level of 2D wind field
 tracer=720 #360  # number of tracers
 age=40
 center=$((nx / 2))
