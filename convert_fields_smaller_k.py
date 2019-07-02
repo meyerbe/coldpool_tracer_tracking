@@ -98,7 +98,6 @@ def convert_file_for_singlevariable(var, files, path_fields, path_out, k0):
 
         rootgrp_out = nc.Dataset(fullpath_out, 'w', format='NETCDF4')
         rootgrp_out.createDimension('time', None)
-        # rootgrp_out.createDimension('time', nt)
         rootgrp_out.createDimension('nx', nx)
         rootgrp_out.createDimension('ny', ny)
         time_out = rootgrp_out.createVariable('time', 'f8', ('time',))
@@ -107,7 +106,9 @@ def convert_file_for_singlevariable(var, files, path_fields, path_out, k0):
         time_out[:] = times
         var_out = rootgrp_out.createVariable(var, 'f8', ('time', 'nx', 'ny'))
 
+        ## ----- interpolation
         # data = np.zeros((nx, ny), dtype=np.double)
+        ## -----------------------
         for it,file in enumerate(files):
             t0 = file[:-3]
             print('file: ', file)
@@ -117,7 +118,7 @@ def convert_file_for_singlevariable(var, files, path_fields, path_out, k0):
             data = rootgrp_in.groups['fields'].variables[var][:, :, :]
             var_out[it, :, :] = data[:, :, k0]
             # ----------------------
-            # ----- interpolation
+            ## ----- interpolation
             # data_ = rootgrp_in.groups['fields'].variables[var][:,:,k0]
             # if var == 'u':
             #     for i in range(1, nx - 1):
