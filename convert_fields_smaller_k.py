@@ -12,8 +12,6 @@ def main():
     parser = argparse.ArgumentParser(prog='')
     # parser.add_argument("casename")
     parser.add_argument("path")
-    parser.add_argument("--kmax")
-    parser.add_argument("--kmin")
     parser.add_argument("--k0")
     parser.add_argument("--interpolation")      # 0: off, 1: on
     args = parser.parse_args()
@@ -48,16 +46,14 @@ def main():
 
 
     # (1) for each time/file in path_fields do...
-
     # (2) read in original fields file
     #       >> field_keys
     #       >> how to access dimensions of variables?
     #       >> data
-    # (3) create new fields file, e.g. 100_k_kmax.nc
+    # (3) create new fields file
     # (4) save data[:,:,k0] in new variable of new fields file
 
     files = [name for name in os.listdir(path_fields) if name[-2:] == 'nc']
-    print('')
 
 
     ''' output file with one level of one variable for all times '''
