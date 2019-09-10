@@ -34,7 +34,7 @@
 ! number of precipitation cells is given as input now. But can be done nicer
 !
 ! OUTPUT: 
-! traced(CP-ID,int tracer ID, property) 
+! traced(CP-ID, int tracer ID, property)
 ! traced(:,:, 1)   x pos of tracer 
 ! traced(:,:, 2)   y pos of tracer
 ! traced(:,:, 3)   x gp 
@@ -512,7 +512,7 @@ USE cp_parameters, ONLY : dsize_x, dsize_y, res, dt, max_tracer_CP
   INTEGER, INTENT(IN)       :: tracpo(2,max_tracers)
   INTEGER                   :: sub_dt   ! subtimstepping
 
- sub_dt =60 ! update evry min
+ sub_dt =dt/5 ! update every min
   it = 1 ! counter trough traced
   DO WHILE (it .LT. count_tracer) ! count tracer are all tracers set until here
 
@@ -586,7 +586,7 @@ USE cp_parameters, ONLY : dsize_x, dsize_y, res, dt, max_tracer_CP
   REAL                      :: wgt_x, wgt_y, wgt_xt, wgt_yt
   INTEGER, INTENT(IN)       :: tracpo(2,max_tracers)
   INTEGER                   :: sub_dt   ! subtimstepping
-  sub_dt =60 ! update evry min
+  sub_dt =dt/5 ! update every min
   it = 1 ! counter trough traced
   DO WHILE (it .LT. count_tracer) ! count tracer are all tracers set until here
     ! determining the first time step of the event
