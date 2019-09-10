@@ -31,7 +31,7 @@ def main():
         os.mkdir(path_out)
 
     if args.interpolation:
-        interpolation = args.interpolation
+        interpolation = np.int(args.interpolation)
     else:
         interpolation = 0       # off
 
@@ -39,7 +39,7 @@ def main():
     print('path out', path_out)
     print('path fields: ', path_fields)
     print('')
-    print('interpolation: ' + str(interpolation))
+    print('interpolation: ' + str(interpolation), type(interpolation))
     print('')
     print('k0', k0)
     print('')
