@@ -146,7 +146,7 @@ count_tracer = 1 ! counts individual pixels !OCH was ist mit pixeln gemeint? der
  onset = minval(cpio(:,3),1)
 
 
-n_sub = 5
+n_sub = 10
 write(*,*) "setting # sub-timesteps to ", n_sub
 
 
@@ -173,7 +173,7 @@ write(*,*) "setting # sub-timesteps to ", n_sub
    ! interpolate velocity field at t=timestep onto tracer position in traced (position at t=timestep-1 !??)
    !   and save onto traced(:,:,13:14)
    CALL velocity_interpol(vel(:,:,1), vel(:,:,2), timestep, traced, count_tracer, &
-                  max_no_of_cells, tracpo, max_tracers, dsize_x, dsize_y)
+                  max_no_of_cells, tracpo, max_tracers, dsize_x, dsize_y, n_sub)
    ! compute polar coordinates (distance and angle) of tracers based on traced (at t=timestep-1!?) (>> traced(:,:,i),i=5,8,15,17)
    CALL geometry(traced,COMx,COMy,already_tracked,max_no_of_cells,dsize_x,dsize_y)
    ! compute radial and tangential velocity based on updated velocity (v(t=timestep,x(t=timestep-1))
@@ -185,7 +185,7 @@ write(*,*) "setting # sub-timesteps to ", n_sub
    !   and update velocity v(timestep, x(timestep-1+4/5*dt_sub) >> (traced(:,:,13:14))
    !   and update tracer position to where it will be advected by v(timestep, x(timestep)) (>> traced(:,:,1:4))
    CALL update_tracer(vel(:,:,1),vel(:,:,2),timestep,traced, count_tracer, &
-                  max_no_of_cells,tracpo,max_tracers,dsize_x, dsize_y)
+                  max_no_of_cells,tracpo,max_tracers,dsize_x,dsize_y,n_sub)
  END DO
  WRITE(*,*) "finished main loop" 
 ! 200 CONTINUE 
@@ -303,7 +303,7 @@ END SUBROUTINE
 !--------------------------------------------------------------------------------------
 ! INTERPOLATE velocities 
 !-----------------------------------------------------------------------------------
-SUBROUTINE velocity_interpol(velx,vely,timestep,traced, count_tracer,max_no_of_cells,tracpo,max_tracers,dsize_x, dsize_y)
+SUBROUTINE velocity_interpol(velx,vely,timestep,traced, count_tracer,max_no_of_cells,tracpo,max_tracers,dsize_x,dsize_y,n_sub)
 USE cp_parameters, ONLY :  res, dt, max_tracer_CP
 
   INTEGER, INTENT(IN)       :: timestep,max_no_of_cells, max_tracers
@@ -322,8 +322,9 @@ USE cp_parameters, ONLY :  res, dt, max_tracer_CP
   INTEGER, INTENT(IN)       :: tracpo(2,max_tracers)
   INTEGER                   :: sub_dt   ! subtimstepping
   INTEGER, INTENT(IN)       :: dsize_x, dsize_y
-  INTEGER                   :: n_sub
-  n_sub = 5
+  !INTEGER                   :: n_sub
+  INTEGER, INTENT(IN)       :: n_sub
+  !n_sub = 5
   sub_dt = dt/n_sub ! update evry min
   write(*,*) 'velocity interpolation: dt ', dt, 'sub_dt ', sub_dt 
   it = 1 ! counter trough traced
@@ -383,7 +384,7 @@ END SUBROUTINE velocity_interpol
 !--------------------------------------------------------------------------------------
 ! UPDATE TRACER along the horizontal wind field
 !-----------------------------------------------------------------------------------
-SUBROUTINE update_tracer(velx,vely,timestep,traced, count_tracer,max_no_of_cells,tracpo,max_tracers,dsize_x, dsize_y)
+SUBROUTINE update_tracer(velx,vely,timestep,traced, count_tracer,max_no_of_cells,tracpo,max_tracers,dsize_x,dsize_y,n_sub)
 !OCH TO DO: dt and resolution should be parameter read by USE from module
 USE cp_parameters, ONLY : res, dt, max_tracer_CP
 
@@ -403,8 +404,9 @@ USE cp_parameters, ONLY : res, dt, max_tracer_CP
   INTEGER, INTENT(IN)       :: tracpo(2,max_tracers)
   INTEGER                   :: sub_dt   ! subtimstepping
   INTEGER, INTENT(IN)       :: dsize_x, dsize_y
-  INTEGER                   :: n_sub
-  n_sub = 5
+  INTEGER, INTENT(IN)       :: n_sub
+  !INTEGER                   :: n_sub
+  !n_sub = 5
   sub_dt =dt/n_sub ! update evry min
   write(*,*) 'update tracer: sub_dt ', sub_dt, ', res (dx) ', res 
   it = 1 ! counter trough traced
