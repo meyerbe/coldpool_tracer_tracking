@@ -8,4 +8,5 @@ REAL                  :: res               ! resolution in m
 REAL                  :: dt                ! time step in sec
 CHARACTER(LEN=200)    :: odir
 logical               :: rad               ! If True tracer follow radial vel
+INTEGER               :: n_sub             ! # subtimesteps
 END MODULE cp_parameters

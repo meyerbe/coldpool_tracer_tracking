@@ -88,10 +88,10 @@ INTEGER              :: timestep
 INTEGER              :: count_tracer             ! counts the internal tracer in an individual CP
 INTEGER              :: tracking_end
 !INTEGER              :: dsize_y,dsize_x
-INTEGER              :: n_sub                    ! number of sub-timesteps
+!INTEGER              :: n_sub                    ! number of sub-timesteps
 !INITIALIZE some values
 namelist /INPUTgeneral/  dt, res 
-namelist /INPUTtracer/ max_tracer_CP, max_age, rad
+namelist /INPUTtracer/ max_tracer_CP, max_age, rad, n_sub
 namelist /INPUTIO/ odir
 open(100,file='job/namelist.dat')
 read(100,nml=INPUTgeneral)
@@ -146,7 +146,7 @@ count_tracer = 1 ! counts individual pixels !OCH was ist mit pixeln gemeint? der
  onset = minval(cpio(:,3),1)
 
 
-n_sub = 10
+!n_sub = 1
 write(*,*) "setting # sub-timesteps to ", n_sub
 
 

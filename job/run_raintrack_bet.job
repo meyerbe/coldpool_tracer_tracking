@@ -14,12 +14,14 @@ read -p "level: " lv        # select level of 2D wind field
 read -p "radius: " rad      # radius of initial tracer circle
 read -p "nx: " nx
 read -p "dx: " res
-read -p "tracer: interpolation input fields " interpol
+read -p "tracer: interpolation input fields (0=no,1=yes) " interpol
+read -p "# sub-timesteps: " nsub
 echo "level:" $lv
 echo "radius CP: " $rad
 echo "domain size: " $nx
 echo "resolution: " $res
 echo "interpolation: " $interpol   #0: no interpolation, 1: interpolation
+echo "number of sub-timesteps: " $nsub
 
 OUT=${JOBNAME}/
 echo "path: " ${OUT}
@@ -52,6 +54,7 @@ mkdir -p ${OUT}/tracer_k$lv/input/
 #########################
 ### MAKE NAMELIST 
 #########################
+echo "make namelist"
      sed \
         -e s%@{dto}%${dt}%g \
         -e s%@{dx}%${res}%g \
@@ -61,6 +64,7 @@ mkdir -p ${OUT}/tracer_k$lv/input/
         -e s%@{tracer}%${tracer}%g \
         -e s%@{age}%${age}%g \
         -e s%@{radv}%${radv}%g\
+        -e s%@{nsub}%${nsub}%g\
        <namelist.tmp>namelist.dat
 cp namelist.dat ${OUT}/tracer_k$lv/.
 cd ..
@@ -114,7 +118,11 @@ echo "finished tracer tracking"
 #########################
 # CLEANING
 #########################
-cp -r job ${OUT}/tracer_k$lv/.
+mkdir ${OUT}/tracer_k$lv/
+#cp -r job ${OUT}/tracer_k$lv/.
+cp -r job/run_raintrack_bet.job ${OUT}/tracer_k$lv/job/.
+cp -r src/cp/cp_parameters.f90 ${OUT}/tracer_k$lv/job/
+cp -r src/cp/tracer_tracking_bet.f90 ${OUT}/tracer_k$lv/job/
 #rm info.txt
 #rm mergingCPs.txt
 
