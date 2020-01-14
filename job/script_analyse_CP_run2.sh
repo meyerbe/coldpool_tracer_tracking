@@ -43,7 +43,7 @@ k=0
     echo " "
 
     echo "run tracers (k="$k")"
-    ./run_raintrack_loop.job "$fullpath" $k $rstar ${nx[$count_geom]} $dx $interpol 0 
+    ./run_raintrack_bet.job "$fullpath" $k $rstar ${nx[$count_geom]} $dx $interpol 0 
 
     #echo "run tracers"
     #./run_raintrack_bet.job

@@ -1,5 +1,8 @@
 Run tracer in 'job' repository:
 
+>> use sh-script to call run_raintrack_bet.job
+
+
 (1) run_raintrack_bet.job
 > run tracer algorithm for one simulation
 - adapt script: 
