@@ -38,7 +38,7 @@
 ! number of precipitation cells is given as input now. But can be done nicer
 !
 ! OUTPUT: 
-! traced(CP-ID,int tracer ID, property) 
+! traced(CP-ID, int tracer ID, property)
 ! traced(:,:, 1)   x pos of tracer 
 ! traced(:,:, 2)   y pos of tracer
 ! traced(:,:, 3)   x gp 
@@ -71,7 +71,7 @@ REAL, ALLOCATABLE    :: COMx(:), COMy(:)         ! store COG
 REAL, ALLOCATABLE    :: rmax(:)                  ! area of precip
 !INTEGER, ALLOCATABLE :: IDstart(:)               ! first timestep of precip 
 INTEGER, ALLOCATABLE :: already_tracked(:)       ! memory of cell counter
-REAL, ALLOCATABLE    :: traced(:,:,:)            ! traced information, CP ID x internal tarcer ID x properties
+REAL, ALLOCATABLE    :: traced(:,:,:)            ! tracked information, CP ID x internal tarcer ID x properties
 REAL, ALLOCATABLE    :: traced_dummy(:,:)        ! dummy to sort tracer by angle
 INTEGER,ALLOCATABLE  :: cpio(:,:)                ! to identify merger (dim1) and start time (dim2) splitting events have start time 0 to avoid them
 INTEGER              :: ID                       ! local ID from rain track
@@ -79,7 +79,7 @@ INTEGER              :: i                        ! running index
 INTEGER              :: ierr                     ! error index for reading files
 REAL                 :: xCOG, yCOG               ! buffer variable for read COGs
 INTEGER              :: onset                    ! first cell reaches treshold
-INTEGER              :: max_no_of_cells          ! maximum number if CPs (can be retrieved from the number of rain cells
+INTEGER              :: max_no_of_cells          ! maximum number of CPs (can be retrieved from the number of rain cells
 !INTEGER              :: max_tracer_CP            ! max no of tracers per CP
 INTEGER              :: max_tracers              ! max no of commulative tracers 
 INTEGER,ALLOCATABLE  :: tracpo(:,:)              ! keeps track of first two indices in traced (CP ID, internal tracer ID) for every tracer 
@@ -88,9 +88,10 @@ INTEGER              :: timestep
 INTEGER              :: count_tracer             ! counts the internal tracer in an individual CP
 INTEGER              :: tracking_end
 !INTEGER              :: dsize_y,dsize_x
+!INTEGER              :: n_sub                    ! number of sub-timesteps
 !INITIALIZE some values
 namelist /INPUTgeneral/  dt, res 
-namelist /INPUTtracer/ max_tracer_CP, max_age, rad
+namelist /INPUTtracer/ max_tracer_CP, max_age, rad, n_sub
 namelist /INPUTIO/ odir
 open(100,file='job/namelist.dat')
 read(100,nml=INPUTgeneral)
@@ -144,6 +145,11 @@ count_tracer = 1 ! counts individual pixels !OCH was ist mit pixeln gemeint? der
 ! read when first precip is tracked
  onset = minval(cpio(:,3),1)
 
+
+!n_sub = 1
+write(*,*) "setting # sub-timesteps to ", n_sub
+
+
  write(*,*) "start main loop"
  DO timestep = onset,tracking_end
    write(*,*) 'timestep',timestep, 'onset', onset
@@ -156,18 +162,30 @@ count_tracer = 1 ! counts individual pixels !OCH was ist mit pixeln gemeint? der
    !READ (5,END=200) srv_header_input
    !READ (5) vel(:,:,2)
 
-   ! read velocity files until start of tracking is reached, if so, also read
-   ! tracking
-   CALL initCircle(max_no_of_cells,timestep,traced, COMx,COMy,&
-                  rmax,cpio,max_tracers,tracpo,count_tracer,dsize_x, dsize_y)
-   CALL velocity_interpol(vel(:,:,1),vel(:,:,2),timestep,traced, count_tracer, &
-                  max_no_of_cells,tracpo,max_tracers,dsize_x, dsize_y)
+   ! read velocity files until start of tracking is reached, if so, also read tracking
+   !   max_no_of_cells              ! max number of CPs
+   !   traced                       ! tracked information, (CP ID x internal tarcer ID x properties) (no time dimension)
+   !   tracpo                       ! keeps track of first two indices in traced (CP ID, internal tracer ID) for every tracer
+
+   ! only called when timestep==cpio(:,3); if so, initialize new tracers
+   CALL initCircle(max_no_of_cells, timestep, traced, COMx,COMy,&
+                  rmax, cpio, max_tracers, tracpo, count_tracer, dsize_x, dsize_y)
+   ! interpolate velocity field at t=timestep onto tracer position in traced (position at t=timestep-1 !??)
+   !   and save onto traced(:,:,13:14)
+   CALL velocity_interpol(vel(:,:,1), vel(:,:,2), timestep, traced, count_tracer, &
+                  max_no_of_cells, tracpo, max_tracers, dsize_x, dsize_y, n_sub)
+   ! compute polar coordinates (distance and angle) of tracers based on traced (at t=timestep-1!?) (>> traced(:,:,i),i=5,8,15,17)
    CALL geometry(traced,COMx,COMy,already_tracked,max_no_of_cells,dsize_x,dsize_y)
+   ! compute radial and tangential velocity based on updated velocity (v(t=timestep,x(t=timestep-1))
    CALL radvel(traced,already_tracked,max_no_of_cells)
+   ! write output: x(timestep-1), v(timestep,x(timestep-1))
    CALL write_output(traced,max_tracers,count_tracer,timestep,tracpo,&
                   max_no_of_cells,COMx,COMy)
+   ! sub-time stepping: interpolate velocity onto tracer position v(timestep,x(timestep-1+n/5*dt_sub)) (for first subtime-step same as in velocity_interpol)
+   !   and update velocity v(timestep, x(timestep-1+4/5*dt_sub) >> (traced(:,:,13:14))
+   !   and update tracer position to where it will be advected by v(timestep, x(timestep)) (>> traced(:,:,1:4))
    CALL update_tracer(vel(:,:,1),vel(:,:,2),timestep,traced, count_tracer, &
-                  max_no_of_cells,tracpo,max_tracers,dsize_x, dsize_y)
+                  max_no_of_cells,tracpo,max_tracers,dsize_x,dsize_y,n_sub)
  END DO
  WRITE(*,*) "finished main loop" 
 ! 200 CONTINUE 
@@ -211,7 +229,7 @@ CONTAINS
   integer, intent(out)     :: nt, nx, ny
   integer                  :: ncId, rhVarId
   integer, dimension(nf90_max_var_dims) :: dimIDs
-  write(*,*) filename
+  write(*,*) "get dimensions of input file: ", filename
     CALL check(nf90_open(filename, nf90_NoWrite, ncid))
     CALL check(nf90_inq_varid(ncid,"u", rhVarId))
     CALL check(nf90_inquire_variable(ncid, rhVarId, dimids = dimIDs))
@@ -285,7 +303,7 @@ END SUBROUTINE
 !--------------------------------------------------------------------------------------
 ! INTERPOLATE velocities 
 !-----------------------------------------------------------------------------------
-SUBROUTINE velocity_interpol(velx,vely,timestep,traced, count_tracer,max_no_of_cells,tracpo,max_tracers,dsize_x, dsize_y)
+SUBROUTINE velocity_interpol(velx,vely,timestep,traced, count_tracer,max_no_of_cells,tracpo,max_tracers,dsize_x,dsize_y,n_sub)
 USE cp_parameters, ONLY :  res, dt, max_tracer_CP
 
   INTEGER, INTENT(IN)       :: timestep,max_no_of_cells, max_tracers
@@ -304,7 +322,11 @@ USE cp_parameters, ONLY :  res, dt, max_tracer_CP
   INTEGER, INTENT(IN)       :: tracpo(2,max_tracers)
   INTEGER                   :: sub_dt   ! subtimstepping
   INTEGER, INTENT(IN)       :: dsize_x, dsize_y
-  sub_dt =dt/5 ! update evry min
+  !INTEGER                   :: n_sub
+  INTEGER, INTENT(IN)       :: n_sub
+  !n_sub = 5
+  sub_dt = dt/n_sub ! update evry min
+  write(*,*) 'velocity interpolation: dt ', dt, 'sub_dt ', sub_dt
   it = 1 ! counter trough traced
   DO WHILE (it .LT. count_tracer) ! count tracer are all tracers set until here
 
@@ -362,7 +384,7 @@ END SUBROUTINE velocity_interpol
 !--------------------------------------------------------------------------------------
 ! UPDATE TRACER along the horizontal wind field
 !-----------------------------------------------------------------------------------
-SUBROUTINE update_tracer(velx,vely,timestep,traced, count_tracer,max_no_of_cells,tracpo,max_tracers,dsize_x, dsize_y)
+SUBROUTINE update_tracer(velx,vely,timestep,traced, count_tracer,max_no_of_cells,tracpo,max_tracers,dsize_x,dsize_y,n_sub)
 !OCH TO DO: dt and resolution should be parameter read by USE from module
 USE cp_parameters, ONLY : res, dt, max_tracer_CP
 
@@ -382,7 +404,11 @@ USE cp_parameters, ONLY : res, dt, max_tracer_CP
   INTEGER, INTENT(IN)       :: tracpo(2,max_tracers)
   INTEGER                   :: sub_dt   ! subtimstepping
   INTEGER, INTENT(IN)       :: dsize_x, dsize_y
-  sub_dt =60 ! update evry min
+  INTEGER, INTENT(IN)       :: n_sub
+  !INTEGER                   :: n_sub
+  !n_sub = 5
+  sub_dt =dt/n_sub ! update evry min
+  write(*,*) 'update tracer: sub_dt ', sub_dt, ', res (dx) ', res
   it = 1 ! counter trough traced
   DO WHILE (it .LT. count_tracer) ! count tracer are all tracers set until here
     ! determining the first time step of the event
@@ -395,7 +421,7 @@ USE cp_parameters, ONLY : res, dt, max_tracer_CP
      iy=traced(tracpo(1,it),tracpo(2,it),2) ! position in gridpoints
 
      !for u-Wind defined on xt (half level in x direction)
-     do i = 1,5
+     do i = 1,n_sub
        ixt = ix-0.5
 
        wgt_xt  = MOD(ixt,1.)
@@ -589,6 +615,7 @@ END SUBROUTINE sort
 
 SUBROUTINE write_output(traced,max_tracers,count_tracer,timestep,tracpo,&
                        max_no_of_cells,COMx,COMy)
+  WRITE(*,*) "write output"
 USE  cp_parameters, ONLY :max_tracer_CP, max_age
   INTEGER, INTENT(IN)       :: count_tracer,max_tracers, timestep, &
                                max_no_of_cells !, max_tracer_CP 
@@ -613,12 +640,12 @@ USE  cp_parameters, ONLY :max_tracer_CP, max_age
   DO WHILE (it .LT. count_tracer)
     !IF (traced(tracpo(1,it),tracpo(2,it),11)  .eq. 1.) THEN  !trace only if tracer is active
     !      IF(INT(traced(tracpo(1,it),tracpo(2,it),7)) .le. max_age)then   ! output only up to  3hours
-            WRITE(40,150) INT(timestep),INT(traced(tracpo(1,it),tracpo(2,it),7)),& !timestep, age
-                        it,INT(traced(tracpo(1,it),tracpo(2,it),9)),& !tracer and CP ID
-                        traced(tracpo(1,it),tracpo(2,it),1),traced(tracpo(1,it),tracpo(2,it),2),& !pos 1-2
-                        INT(traced(tracpo(1,it),tracpo(2,it),3)),INT(traced(tracpo(1,it),tracpo(2,it),4)),& !rounded
-                        traced(tracpo(1,it),tracpo(2,it),5),traced(tracpo(1,it),tracpo(2,it),8),& !distance and angle
-                        traced(tracpo(1,it),tracpo(2,it),13),traced(tracpo(1,it),tracpo(2,it),14),& ! u, v Wind component
+            WRITE(40,150) INT(timestep), INT(traced(tracpo(1,it),tracpo(2,it),7)),& !timestep, age
+                        it, INT(traced(tracpo(1,it),tracpo(2,it),9)),& !tracer and CP ID
+                        traced(tracpo(1,it),tracpo(2,it),1), traced(tracpo(1,it),tracpo(2,it),2),& !pos 1-2
+                        INT(traced(tracpo(1,it),tracpo(2,it),3)), INT(traced(tracpo(1,it),tracpo(2,it),4)),& !rounded
+                        traced(tracpo(1,it),tracpo(2,it),5), traced(tracpo(1,it),tracpo(2,it),8),& !distance and angle
+                        traced(tracpo(1,it),tracpo(2,it),13), traced(tracpo(1,it),tracpo(2,it),14),& ! u, v Wind component
                         traced(tracpo(1,it),tracpo(2,it),19),& ! radial vel
                         traced(tracpo(1,it),tracpo(2,it),20),& ! tangential vel
                         traced(tracpo(1,it),tracpo(2,it),15),traced(tracpo(1,it),tracpo(2,it),17),& ! x and y distance  
