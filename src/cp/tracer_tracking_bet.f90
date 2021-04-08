@@ -326,7 +326,7 @@ USE cp_parameters, ONLY :  res, dt, max_tracer_CP
   INTEGER, INTENT(IN)       :: n_sub
   !n_sub = 5
   sub_dt = dt/n_sub ! update evry min
-  write(*,*) 'velocity interpolation: dt ', dt, 'sub_dt ', sub_dt 
+  write(*,*) 'velocity interpolation: dt ', dt, 'sub_dt ', sub_dt
   it = 1 ! counter trough traced
   DO WHILE (it .LT. count_tracer) ! count tracer are all tracers set until here
 
@@ -408,7 +408,7 @@ USE cp_parameters, ONLY : res, dt, max_tracer_CP
   !INTEGER                   :: n_sub
   !n_sub = 5
   sub_dt =dt/n_sub ! update evry min
-  write(*,*) 'update tracer: sub_dt ', sub_dt, ', res (dx) ', res 
+  write(*,*) 'update tracer: sub_dt ', sub_dt, ', res (dx) ', res
   it = 1 ! counter trough traced
   DO WHILE (it .LT. count_tracer) ! count tracer are all tracers set until here
     ! determining the first time step of the event
@@ -615,6 +615,7 @@ END SUBROUTINE sort
 
 SUBROUTINE write_output(traced,max_tracers,count_tracer,timestep,tracpo,&
                        max_no_of_cells,COMx,COMy)
+  WRITE(*,*) "write output"
 USE  cp_parameters, ONLY :max_tracer_CP, max_age
   INTEGER, INTENT(IN)       :: count_tracer,max_tracers, timestep, &
                                max_no_of_cells !, max_tracer_CP 
