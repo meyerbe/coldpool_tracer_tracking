@@ -12,9 +12,8 @@ def main():
     parser = argparse.ArgumentParser(prog='')
     # parser.add_argument("casename")
     parser.add_argument("path")
-    parser.add_argument("--kmax")
-    parser.add_argument("--kmin")
     parser.add_argument("--k0")
+    parser.add_argument("--interpolation")      # 0: off, 1: on
     args = parser.parse_args()
 
 
@@ -25,38 +24,43 @@ def main():
     path_fields = os.path.join(path_in, 'fields')
     if args.k0:
         k0 = np.int(args.k0)
-        path_out = os.path.join(path_in, 'fields_k' + str(k0))
+        path_out = os.path.join(path_in, 'tracer_k' + str(k0), 'input')
     else:
         k0 = -1
     if not os.path.exists(path_out):
         os.mkdir(path_out)
+
+    if args.interpolation:
+        interpolation = np.int(args.interpolation)
+    else:
+        interpolation = 0       # off
+
     print('path in', path_in)
     print('path out', path_out)
     print('path fields: ', path_fields)
+    print('')
+    print('interpolation: ' + str(interpolation), type(interpolation))
     print('')
     print('k0', k0)
     print('')
 
 
     # (1) for each time/file in path_fields do...
-
     # (2) read in original fields file
     #       >> field_keys
     #       >> how to access dimensions of variables?
     #       >> data
-    # (3) create new fields file, e.g. 100_k_kmax.nc
+    # (3) create new fields file
     # (4) save data[:,:,k0] in new variable of new fields file
 
     files = [name for name in os.listdir(path_fields) if name[-2:] == 'nc']
-    print(files)
-    print('')
 
 
     ''' output file with one level of one variable for all times '''
     var_list = ['u', 'v']
     for var in var_list:
         if k0 >= 0:
-            convert_file_for_singlevariable(var, files, path_fields, path_out, k0)
+            convert_file_for_singlevariable(var, files, path_fields, path_out, k0, interpolation)
     print('finished field conversion')
     print('')
     return
@@ -65,8 +69,8 @@ def main():
 
 
 
-def convert_file_for_singlevariable(var, files, path_fields, path_out, k0):
-    print('var', var)
+def convert_file_for_singlevariable(var, files, path_fields, path_out, k0, interpol):
+    print('convert: var', var)
     times = [np.int(name[:-3]) for name in files]
     times.sort()
     print('times', times)
@@ -98,7 +102,6 @@ def convert_file_for_singlevariable(var, files, path_fields, path_out, k0):
 
         rootgrp_out = nc.Dataset(fullpath_out, 'w', format='NETCDF4')
         rootgrp_out.createDimension('time', None)
-        # rootgrp_out.createDimension('time', nt)
         rootgrp_out.createDimension('nx', nx)
         rootgrp_out.createDimension('ny', ny)
         time_out = rootgrp_out.createVariable('time', 'f8', ('time',))
@@ -107,27 +110,32 @@ def convert_file_for_singlevariable(var, files, path_fields, path_out, k0):
         time_out[:] = times
         var_out = rootgrp_out.createVariable(var, 'f8', ('time', 'nx', 'ny'))
 
-        # data = np.zeros((nx, ny), dtype=np.double)
-        for it,file in enumerate(files):
-            t0 = file[:-3]
-            print('file: ', file)
-            fullpath_in = os.path.join(path_fields, file)
-            rootgrp_in = nc.Dataset(fullpath_in, 'r')
-            # ----- no interpolation
-            data = rootgrp_in.groups['fields'].variables[var][:, :, :]
-            var_out[it, :, :] = data[:, :, k0]
-            # ----------------------
-            # ----- interpolation
-            # data_ = rootgrp_in.groups['fields'].variables[var][:,:,k0]
-            # if var == 'u':
-            #     for i in range(1, nx - 1):
-            #         data[i,:] = 0.5*(data_[i,:]+data_[i-1,:])
-            # elif var == 'v':
-            #     for j in range(1,ny-1):
-            #         data[:,j] = 0.5*(data_[:,j]+data_[:,j-1])
-            # del data_
+        if interpol == 1:
+            # ----- interpolation ON
+            data = np.zeros((nx, ny), dtype=np.double)
+            for it,file in enumerate(files):
+                fullpath_in = os.path.join(path_fields, file)
+                rootgrp_in = nc.Dataset(fullpath_in, 'r')
+                print('file: ', file, ' interpolating field')
+                data_ = rootgrp_in.groups['fields'].variables[var][:,:,k0]
+                if var == 'u':
+                    for i in range(1, nx - 1):
+                        data[i,:] = 0.5*(data_[i,:]+data_[i-1,:])
+                elif var == 'v':
+                    for j in range(1,ny-1):
+                        data[:,j] = 0.5*(data_[:,j]+data_[:,j-1])
+                del data_
+                var_out[it, :, :] = data[:, :]
             # -----------------------
-            var_out[it, :, :] = data[:, :]
+        elif interpol == 0:
+            # ----- interpolation OFF
+            for it,file in enumerate(files):
+                fullpath_in = os.path.join(path_fields, file)
+                rootgrp_in = nc.Dataset(fullpath_in, 'r')
+                print('file: ', file, ' not interpolated')
+                data = rootgrp_in.groups['fields'].variables[var][:, :, :]
+                var_out[it, :, :] = data[:, :, k0]
+                # -----------------------
 
         rootgrp_out.close()
 
