@@ -12,13 +12,15 @@
 JOBNAME=$1
 read -p "level: " lv        # select level of 2D wind field
 read -p "radius: " rad      # radius of initial tracer circle
-read -p "nx: " nx
+#read -p "nx: " nx
 read -p "dx: " res
+read -p "ic: " ic
+read -p "jc: " jc
 read -p "tracer: interpolation input fields (0=no,1=yes) " interpol
 read -p "# sub-timesteps: " nsub
 echo "level:" $lv
 echo "radius CP: " $rad
-echo "domain size: " $nx
+#echo "domain size: " $nx
 echo "resolution: " $res
 echo "interpolation: " $interpol   #0: no interpolation, 1: interpolation
 echo "number of sub-timesteps: " $nsub
@@ -34,10 +36,10 @@ tracer=720 #360  # number of tracers
 age=40
 radius=$((rad / res + 5))  # radius of initial tracer circle
 radius2=$((rad / res + 10))
-ic_circle1=$((nx/2))
-jc_circle1=$((nx/2))
-ic_circle2=$((nx/2))
-jc_circle2=$((nx/2))
+ic_circle1=$ic #$((nx/2))
+jc_circle1=$jc #$((nx/2))
+ic_circle2=$ic #$((nx/2))
+jc_circle2=$jc #$((nx/2))
 echo "center circles: " $ic_circle1, $jc_circle1
 echo "radius circle 1: " $radius
 echo "radius circle 2: " $radius2
@@ -59,7 +61,7 @@ echo "make namelist"
         -e s%@{dto}%${dt}%g \
         -e s%@{dx}%${res}%g \
         -e s%@{cutoff}%${cutoff}%g \
-        -e s%@{mincellsize}%${mincellsize}%g \
+        #-e s%@{mincellsize}%${mincellsize}%g \
         -e s%@{OUT}%${OUT}/tracer_k$lv/%g \
         -e s%@{tracer}%${tracer}%g \
         -e s%@{age}%${age}%g \
@@ -120,7 +122,7 @@ echo "finished tracer tracking"
 #########################
 mkdir ${OUT}/tracer_k$lv/
 #cp -r job ${OUT}/tracer_k$lv/.
-cp -r job/run_raintrack_bet.job ${OUT}/tracer_k$lv/job/.
+cp -r job/run_raintrack_bet.job ${OUT}/tracer_k$lv/job/
 cp -r src/cp/cp_parameters.f90 ${OUT}/tracer_k$lv/job/
 cp -r src/cp/tracer_tracking_bet.f90 ${OUT}/tracer_k$lv/job/
 #rm info.txt
