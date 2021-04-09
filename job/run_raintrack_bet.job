@@ -121,6 +121,7 @@ echo "finished tracer tracking"
 # CLEANING
 #########################
 mkdir ${OUT}/tracer_k$lv/
+mkdir ${OUT}/tracer_k$lv/job
 #cp -r job ${OUT}/tracer_k$lv/.
 cp -r job/run_raintrack_bet.job ${OUT}/tracer_k$lv/job/
 cp -r src/cp/cp_parameters.f90 ${OUT}/tracer_k$lv/job/
