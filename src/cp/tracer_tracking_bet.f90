@@ -106,7 +106,7 @@ max_tracers = max_no_of_cells*max_tracer_CP
 write(*,*) 'max no of cps:', max_no_of_cells
 ! get dimensions of velocity fields
 CALL get_dim(tracking_end,dsize_y,dsize_x,trim(odir) //'/input/uv_alltimes.nc')
-!write(*,*) tracking_end,dsize_x,dsize_y
+write(*,*) 'dsize_x, dsize_y: ', dsize_x,dsize_y
 ! allocate fields
 ALLOCATE(cpio(max_no_of_cells,3))
 ALLOCATE(traced(max_no_of_cells,max_tracer_CP,20))
@@ -132,6 +132,7 @@ ALLOCATE(tracpo(2,max_tracers))
      write(*,*) 'Beim Oeffnen der Datei ist ein Fehler Nr.', ierr,' aufgetreten'
  END IF
 400 CONTINUE
+write(*,*) "circles ic1, ic2, jc1, jc2: ", COMx, COMy
 
 !OPEN(4,FILE=trim(odir) // '/input/input_u.srv',FORM='unformatted', ACTION='read')
 !OPEN(5,FILE=trim(odir) // '/input/input_v.srv',FORM='unformatted',ACTION='read')
@@ -154,6 +155,7 @@ write(*,*) "setting # sub-timesteps to ", n_sub
  write(*,*) "start main loop"
  DO timestep = onset,tracking_end
    write(*,*) 'timestep',timestep, 'onset', onset
+   write(*,*) 'COMx, COMy, dsize_x, dsize_y', COMx, COMy, dsize_x, dsize_y
    ! read velocity files
    CALL read_nc_2D (vel(:,:,1),'u',trim(odir) // '/input/uv_alltimes.nc',timestep)
    CALL read_nc_2D (vel(:,:,2),'v',trim(odir) // '/input/uv_alltimes.nc',timestep)
@@ -173,6 +175,7 @@ write(*,*) "setting # sub-timesteps to ", n_sub
                   rmax, cpio, max_tracers, tracpo, count_tracer, dsize_x, dsize_y)
    ! interpolate velocity field at t=timestep onto tracer position in traced (position at t=timestep-1 !??)
    !   and save onto traced(:,:,13:14)
+   write(*,*) 'DIMENSIONS', SHAPE(vel)
    CALL velocity_interpol(vel(:,:,1), vel(:,:,2), timestep, traced, count_tracer, &
                   max_no_of_cells, tracpo, max_tracers, dsize_x, dsize_y, n_sub)
    ! compute polar coordinates (distance and angle) of tracers based on traced (at t=timestep-1!?) (>> traced(:,:,i),i=5,8,15,17)
@@ -197,7 +200,7 @@ CONTAINS
 ! -----------------------------------------------------------------------
 ! input 2D nc data
 ! -----------------------------------------------------------------------
-  SUBROUTINE read_nc_2D (poutput,varname, filename,ctime)
+  SUBROUTINE read_nc_2D (poutput, varname, filename, ctime)
 
   IMPLICIT NONE
   character(*), intent(in) :: varname, filename
@@ -206,14 +209,21 @@ CONTAINS
   integer, dimension(nf90_max_var_dims) :: dimIDs
   ! real, allocatable, dimension(:,:,:) ::  zvar
     write(*,*) varname, ctime
-    CALL check(nf90_open(filename, nf90_NoWrite, ncid))
-    CALL check(nf90_inq_varid(ncid,varname, rhVarId))
-    CALL check(nf90_inquire_variable(ncid, rhVarId, dimids = dimIDs))
-    CALL check(nf90_inquire_dimension(ncid, dimIDs(3), len = nt))
+    CALL check(nf90_open(filename, nf90_NoWrite, ncid))                 ! nf90_open: opens existing netCDF dataset for access, returns netCDF ID (ncid)
+                                                                        !     nf90_open(path, mode, ncid, **)
+    CALL check(nf90_inq_varid(ncid,varname, rhVarId))                   ! nf90_inq_varid: finds variable ID (rhVarID) from variable name (varname)
+    CALL check(nf90_inquire_variable(ncid, rhVarId, dimids = dimIDs))   ! nf90_inquire_variable: returns information of variable with ID (rhVarID) from netCDF file with ID (ncid)
+    CALL check(nf90_inquire_dimension(ncid, dimIDs(3), len = nt))       ! return name and length of required dimension (dimIDs(3))
+!    CALL check(nf90_inquire_dimension(ncid, dimIDs(1), len = ny))
+!    CALL check(nf90_inquire_dimension(ncid, dimIDs(2), len = nx))
     CALL check(nf90_inquire_dimension(ncid, dimIDs(1), len = nx))
     CALL check(nf90_inquire_dimension(ncid, dimIDs(2), len = ny))
-    CALL check(nf90_get_var(ncid, rhVarId, poutput, start =(/1,1,ctime/),&
+!    write(*,*) '---- nt ', dimIDs(3), nt
+!    write(*,*) '---- nx ', dimIDs(1), nx
+!    write(*,*) '---- ny ', dimIDs(2), ny
+    CALL check(nf90_get_var(ncid, rhVarId, poutput, start =(/1,1,ctime/),&     ! read in data values of open netCDF dataset
                                                     count= (/nx, ny, 1/)))
+!                                                    count= (/ny, nx, 1/)))
     CALL check(nf90_close(ncid))
   END SUBROUTINE read_nc_2D
 
@@ -233,10 +243,12 @@ CONTAINS
     CALL check(nf90_inq_varid(ncid,"u", rhVarId))
     CALL check(nf90_inquire_variable(ncid, rhVarId, dimids = dimIDs))
     CALL check(nf90_inquire_dimension(ncid, dimIDs(3), len = nt))
+!    CALL check(nf90_inquire_dimension(ncid, dimIDs(2), len = nx))
+!    CALL check(nf90_inquire_dimension(ncid, dimIDs(1), len = ny))
     CALL check(nf90_inquire_dimension(ncid, dimIDs(2), len = ny))
     CALL check(nf90_inquire_dimension(ncid, dimIDs(1), len = nx))
     CALL check(nf90_close(ncid))
-    write(*,*) "nx,ny=", nx, ny
+    write(*,*) "get dims: nx,ny=", nx, ny
   END SUBROUTINE  get_dim
 
 
@@ -282,8 +294,8 @@ SUBROUTINE initCircle(max_no_of_cells,ts,traced, COMx,COMy, &
       do j = 1,max_tracer_CP,1 ! loop trough tracer number
         tracpo(:,count_tracer)=(/i,j/)
         count_tracer           = count_tracer + 1
-        traced(i,j, 1) = MOD(COMx(i) + rmax(i)*cos(j*inc)-1.,float(dsize_x))+1.
-        traced(i,j, 2) = MOD(COMy(i) + rmax(i)*sin(j*inc)-1.,float(dsize_y))+1.
+        traced(i,j, 1) = MOD(COMx(i) + rmax(i)*cos(j*inc)-1.,float(dsize_y))+1.
+        traced(i,j, 2) = MOD(COMy(i) + rmax(i)*sin(j*inc)-1.,float(dsize_x))+1.
         traced(i,j, 6) = ts ! current time
         traced(i,j, 7) = 0   ! age
         traced(i,j, 16) = 1
@@ -327,6 +339,7 @@ USE cp_parameters, ONLY :  res, dt, max_tracer_CP
   !n_sub = 5
   sub_dt = dt/n_sub ! update evry min
   write(*,*) 'velocity interpolation: dt ', dt, 'sub_dt ', sub_dt
+  write(*,*) '                nx, ny: ', dsize_x, dsize_y, SHAPE(velx), SHAPE(vely)
   it = 1 ! counter trough traced
   DO WHILE (it .LT. count_tracer) ! count tracer are all tracers set until here
 
@@ -345,11 +358,11 @@ USE cp_parameters, ONLY :  res, dt, max_tracer_CP
      wgt_xt  = MOD(ixt,1.)
      wgt_y  = MOD(iy,1.)
 
-     ix_l = MOD(INT(ixt-wgt_xt)-1+dsize_x,dsize_x)+1
-     iy_l = MOD(INT(iy-wgt_y)-1+dsize_y,dsize_y)+1
+     ix_l = MOD(INT(ixt-wgt_xt)-1+dsize_y,dsize_y)+1
+     iy_l = MOD(INT(iy-wgt_y)-1+dsize_x,dsize_x)+1
 
-     ix_r = MOD(ix_l +dsize_x,dsize_x)+1
-     iy_r = MOD(iy_l +dsize_y,dsize_y)+1
+     ix_r = MOD(ix_l +dsize_y,dsize_y)+1
+     iy_r = MOD(iy_l +dsize_x,dsize_x)+1
 
      vx_intp = velx(iy_l,ix_l)*(1-wgt_xt)*(1-wgt_y) &
              + velx(iy_l,ix_r)*(1-wgt_xt)*(  wgt_y) &
@@ -362,11 +375,11 @@ USE cp_parameters, ONLY :  res, dt, max_tracer_CP
      wgt_x  = MOD(ix,1.)
      wgt_yt  = MOD(iyt,1.)
 
-     ix_l = MOD(INT(ix-wgt_x)-1+dsize_x,dsize_x)+1
-     iy_l = MOD(INT(iyt-wgt_yt)-1+dsize_y,dsize_y)+1
+     ix_l = MOD(INT(ix-wgt_x)-1+dsize_y,dsize_y)+1
+     iy_l = MOD(INT(iyt-wgt_yt)-1+dsize_x,dsize_x)+1
 
-     ix_r = MOD(ix_l +dsize_x,dsize_x)+1
-     iy_r = MOD(iy_l +dsize_y,dsize_y)+1
+     ix_r = MOD(ix_l +dsize_y,dsize_y)+1
+     iy_r = MOD(iy_l +dsize_x,dsize_x)+1
 
      vy_intp = vely(iy_l,ix_l)*(1-wgt_x)*(1-wgt_yt) &
              + vely(iy_l,ix_r)*(1-wgt_x)*(  wgt_yt) &
@@ -427,11 +440,11 @@ USE cp_parameters, ONLY : res, dt, max_tracer_CP
        wgt_xt  = MOD(ixt,1.)
        wgt_y  = MOD(iy,1.)
 
-       ix_l = MOD(INT(ixt-wgt_xt)-1+dsize_x,dsize_x)+1
-       iy_l = MOD(INT(iy-wgt_y)-1+dsize_y,dsize_y)+1
+       ix_l = MOD(INT(ixt-wgt_xt)-1+dsize_y,dsize_y)+1
+       iy_l = MOD(INT(iy-wgt_y)-1+dsize_x,dsize_x)+1
 
-       ix_r = MOD(ix_l +dsize_x,dsize_x)+1
-       iy_r = MOD(iy_l +dsize_y,dsize_y)+1
+       ix_r = MOD(ix_l +dsize_y,dsize_y)+1
+       iy_r = MOD(iy_l +dsize_x,dsize_x)+1
 
        vx_intp = velx(iy_l,ix_l)*(1-wgt_xt)*(1-wgt_y) &
                + velx(iy_l,ix_r)*(1-wgt_xt)*(  wgt_y) &
@@ -444,11 +457,11 @@ USE cp_parameters, ONLY : res, dt, max_tracer_CP
        wgt_x  = MOD(ix,1.)
        wgt_yt  = MOD(iyt,1.)
 
-       ix_l = MOD(INT(ix-wgt_x)-1+dsize_x,dsize_x)+1
-       iy_l = MOD(INT(iyt-wgt_yt)-1+dsize_y,dsize_y)+1
+       ix_l = MOD(INT(ix-wgt_x)-1+dsize_y,dsize_y)+1
+       iy_l = MOD(INT(iyt-wgt_yt)-1+dsize_x,dsize_x)+1
 
-       ix_r = MOD(ix_l +dsize_x,dsize_x)+1
-       iy_r = MOD(iy_l +dsize_y,dsize_y)+1
+       ix_r = MOD(ix_l +dsize_y,dsize_y)+1
+       iy_r = MOD(iy_l +dsize_x,dsize_x)+1
 
        vy_intp = vely(iy_l,ix_l)*(1-wgt_x)*(1-wgt_yt) &
                + vely(iy_l,ix_r)*(1-wgt_x)*(  wgt_yt) &
@@ -459,8 +472,8 @@ USE cp_parameters, ONLY : res, dt, max_tracer_CP
        traced(tracpo(1,it),tracpo(2,it),13) = vx_intp
        traced(tracpo(1,it),tracpo(2,it),14) = vy_intp
        ! update to new location
-       ix_new = MOD((ix + sub_dt*vx_intp/res)-1.+FLOAT(dsize_x),FLOAT(dsize_x))+1.
-       iy_new = MOD((iy + sub_dt*vy_intp/res)-1.+FLOAT(dsize_y),FLOAT(dsize_y))+1.
+       ix_new = MOD((ix + sub_dt*vx_intp/res)-1.+FLOAT(dsize_y),FLOAT(dsize_y))+1.
+       iy_new = MOD((iy + sub_dt*vy_intp/res)-1.+FLOAT(dsize_x),FLOAT(dsize_x))+1.
        ! uebergabe
        ix = ix_new
        iy = iy_new
@@ -511,8 +524,8 @@ USE cp_parameters, ONLY : max_tracer_CP
     do j = 1,max_tracer_CP,1
     !DO j=1,already_tracked(i)
       ! shift to center
-      traced(i,j,1) = mod(traced(i,j,1)+dx(i)-1+dsize_x,float(dsize_x))+1
-      traced(i,j,2) = mod(traced(i,j,2)+dy(i)-1+dsize_y,float(dsize_y))+1
+      traced(i,j,1) = mod(traced(i,j,1)+dx(i)-1+dsize_y,float(dsize_y))+1
+      traced(i,j,2) = mod(traced(i,j,2)+dy(i)-1+dsize_x,float(dsize_x))+1
 
       DELTAx(i,j) = traced(i,j,1) -dsize_x/2. !(COMx(i)+dx(i))-1.
       DELTAy(i,j) = traced(i,j,2) -dsize_y/2. !(COMy(i)+dy(i))-1 !dsize_y/2.
@@ -544,8 +557,8 @@ USE cp_parameters, ONLY : max_tracer_CP
       END IF
       traced(i,j,5) = sqrt(DELTAy(i,j)**2.+DELTAx(i,j)**2.)
       ! shift back
-      traced(i,j,1) = mod(traced(i,j,1)-dx(i)-1+float(dsize_x),float(dsize_x))+1
-      traced(i,j,2) = mod(traced(i,j,2)-dy(i)-1+float(dsize_y),float(dsize_y))+1
+      traced(i,j,1) = mod(traced(i,j,1)-dx(i)-1+float(dsize_y),float(dsize_y))+1
+      traced(i,j,2) = mod(traced(i,j,2)-dy(i)-1+float(dsize_x),float(dsize_x))+1
      END DO
 !    END IF
    END DO

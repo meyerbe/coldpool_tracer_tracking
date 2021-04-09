@@ -5,10 +5,8 @@
 ##########################
 # SET PATH
 
-
 #read path_root
 #JOBNAME='/3D_sfc_fluxes_off/single_3D_noise/run3/dTh3_z1000_r1000'
-#JOBNAME='/3D_sfc_fluxes_off/single_3D_noise/run6_PE_scaling_dx50m/dTh5_z1000_r500/'
 JOBNAME=$1
 read -p "level: " lv        # select level of 2D wind field
 read -p "radius: " rad      # radius of initial tracer circle
