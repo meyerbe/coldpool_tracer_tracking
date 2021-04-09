@@ -13,6 +13,7 @@ JOBNAME=$1
 read -p "level: " lv        # select level of 2D wind field
 read -p "radius: " rad      # radius of initial tracer circle
 #read -p "nx: " nx
+#read -p "ny: " ny          # note: domain size not necessary sinze retrieved from velocity fields during tracing
 read -p "dx: " res
 read -p "ic: " ic
 read -p "jc: " jc
@@ -20,7 +21,7 @@ read -p "tracer: interpolation input fields (0=no,1=yes) " interpol
 read -p "# sub-timesteps: " nsub
 echo "level:" $lv
 echo "radius CP: " $rad
-#echo "domain size: " $nx
+#echo "domain size: " $nx ", " $ny
 echo "resolution: " $res
 echo "interpolation: " $interpol   #0: no interpolation, 1: interpolation
 echo "number of sub-timesteps: " $nsub
@@ -54,14 +55,13 @@ mkdir -p ${OUT}/tracer_k$lv/input/
 
 
 #########################
-### MAKE NAMELIST 
+### MAKE NAMELIST
 #########################
 echo "make namelist"
      sed \
         -e s%@{dto}%${dt}%g \
         -e s%@{dx}%${res}%g \
         -e s%@{cutoff}%${cutoff}%g \
-        #-e s%@{mincellsize}%${mincellsize}%g \
         -e s%@{OUT}%${OUT}/tracer_k$lv/%g \
         -e s%@{tracer}%${tracer}%g \
         -e s%@{age}%${age}%g \
@@ -72,11 +72,11 @@ cp namelist.dat ${OUT}/tracer_k$lv/.
 cd ..
 
 #########################
-## JOB OUTPUT 
+## JOB OUTPUT
 #########################
 
 ##################################################
-# prepare input for cold pool tracking 
+# prepare input for cold pool tracking
 ##################################################
 
 #cp ../testdata/u_merged_t0_t3600_k1.srv ${OUT}/input/cp/input_u.srv
